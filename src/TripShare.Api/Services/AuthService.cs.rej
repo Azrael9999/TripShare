@@ -1,0 +1,229 @@
+diff a/src/TripShare.Api/Services/AuthService.cs b/src/TripShare.Api/Services/AuthService.cs	(rejected hunks)
+@@ -1,56 +1,59 @@
+ using Microsoft.EntityFrameworkCore;
+ using TripShare.Application.Abstractions;
+ using TripShare.Application.Contracts;
+ using TripShare.Domain.Entities;
+ using TripShare.Infrastructure.Data;
+ 
+ namespace TripShare.Api.Services;
+ 
+ public sealed class AuthService
+ {
+     private readonly AppDbContext _db;
+     private readonly ITokenService _tokens;
+     private readonly IGoogleIdTokenValidator _google;
+     private readonly IEmailSender _email;
++    private readonly ISmsSender _sms;
+     private readonly IConfiguration _cfg;
+     private readonly ILogger<AuthService> _log;
+     private readonly IHttpContextAccessor _http;
+ 
+     public AuthService(
+         AppDbContext db,
+         ITokenService tokens,
+         IGoogleIdTokenValidator google,
+         IEmailSender email,
++        ISmsSender sms,
+         IConfiguration cfg,
+         ILogger<AuthService> log,
+         IHttpContextAccessor http)
+     {
+         _db = db;
+         _tokens = tokens;
+         _google = google;
+         _email = email;
++        _sms = sms;
+         _cfg = cfg;
+         _log = log;
+         _http = http;
+     }
+ 
+     public async Task<AuthResponse> GoogleLoginAsync(GoogleLoginRequest req, CancellationToken ct)
+     {
+         var clientId = _cfg["Auth:Google:ClientId"] ?? throw new InvalidOperationException("Auth:Google:ClientId missing");
+         var payload = await _google.ValidateAsync(req.IdToken, clientId, ct);
+ 
+         var user = await _db.Users.SingleOrDefaultAsync(x => x.AuthProvider == "google" && x.ProviderUserId == payload.Sub, ct);
+         if (user is null)
+         {
+             user = await _db.Users.SingleOrDefaultAsync(x => x.Email == payload.Email, ct);
+         }
+ 
+         if (user is null)
+         {
+             user = new User
+             {
+                 Email = payload.Email,
+                 DisplayName = payload.Name ?? payload.Email.Split('@')[0],
+                 PhotoUrl = payload.Picture,
+                 AuthProvider = "google",
+                 ProviderUserId = payload.Sub,
+@@ -127,59 +130,167 @@ public sealed class AuthService
+         return new AuthResponse(access, newRefresh, RequiresEmailVerification: !token.User.EmailVerified, IsSuspended: false, Me(token.User));
+     }
+ 
+     public async Task ResendVerificationAsync(Guid userId, CancellationToken ct)
+     {
+         var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
+         if (user.EmailVerified) return;
+         await SendVerificationEmailInternalAsync(user, ct);
+     }
+ 
+     public async Task VerifyEmailAsync(string token, CancellationToken ct)
+     {
+         var hash = _tokens.HashToken(token);
+         var rec = await _db.EmailVerificationTokens.Include(x => x.User)
+             .SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
+ 
+         if (rec?.User is null || !rec.IsValid)
+             throw new InvalidOperationException("Verification link is invalid or expired.");
+ 
+         rec.UsedAt = DateTimeOffset.UtcNow;
+         rec.User.EmailVerified = true;
+ 
+         await _db.SaveChangesAsync(ct);
+     }
+ 
++    public async Task RequestSmsOtpAsync(SmsOtpRequest req, CancellationToken ct)
++    {
++        var phone = NormalizePhone(req.PhoneNumber);
++        if (string.IsNullOrWhiteSpace(phone))
++            throw new InvalidOperationException("Phone number is required.");
++
++        var expiryMinutes = int.TryParse(_cfg["Sms:OtpMinutes"], out var m) ? m : 10;
++
++        var user = await _db.Users.SingleOrDefaultAsync(x => x.PhoneNumber == phone, ct);
++        if (user is null)
++        {
++            var digits = new string(phone.Where(char.IsDigit).ToArray());
++            var aliasEmail = $"sms{digits}@tripshare-sms.local";
++            var display = $"User {TrimForDisplay(phone)}";
++            user = new User
++            {
++                Email = aliasEmail,
++                DisplayName = display,
++                PhoneNumber = phone,
++                AuthProvider = "sms",
++                ProviderUserId = phone,
++                EmailVerified = false
++            };
++            _db.Users.Add(user);
++        }
++        else if (user.IsSuspended)
++        {
++            throw new InvalidOperationException("Account is suspended.");
++        }
++
++        var active = await _db.SmsOtpTokens
++            .Where(x => x.UserId == user.Id && x.UsedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow)
++            .ToListAsync(ct);
++        foreach (var a in active) a.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
++
++        var otp = Random.Shared.Next(100000, 999999).ToString();
++        var hash = _tokens.HashToken(otp);
++        _db.SmsOtpTokens.Add(new SmsOtpToken
++        {
++            UserId = user.Id,
++            PhoneNumber = phone,
++            TokenHash = hash,
++            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
++        });
++
++        await _db.SaveChangesAsync(ct);
++
++        var msg = $"Your TripShare code is {otp}. It expires in {expiryMinutes} minutes.";
++        await _sms.SendAsync(phone, msg, ct);
++        _log.LogInformation("SMS OTP sent to {Phone}", phone);
++    }
++
++    public async Task<AuthResponse> VerifySmsOtpAsync(SmsOtpVerifyRequest req, CancellationToken ct)
++    {
++        var phone = NormalizePhone(req.PhoneNumber);
++        var otp = req.Otp?.Trim();
++        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(otp))
++            throw new InvalidOperationException("Phone and OTP are required.");
++
++        var hash = _tokens.HashToken(otp);
++        var token = await _db.SmsOtpTokens
++            .Include(x => x.User)
++            .Where(x => x.PhoneNumber == phone && x.TokenHash == hash && x.UsedAt == null)
++            .OrderByDescending(x => x.CreatedAt)
++            .FirstOrDefaultAsync(ct);
++
++        if (token?.User is null || !token.IsValid)
++            throw new InvalidOperationException("Invalid or expired code.");
++
++        token.UsedAt = DateTimeOffset.UtcNow;
++
++        var user = token.User;
++        if (user.IsSuspended)
++            throw new InvalidOperationException("Account is suspended.");
++        user.PhoneNumber ??= phone;
++        user.PhoneVerified = true;
++        user.EmailVerified = true; // treat verified phone as verified gate
++        user.LastLoginAt = DateTimeOffset.UtcNow;
++
++        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
++        var (refresh, refreshHash) = _tokens.CreateRefreshToken();
++        _db.RefreshTokens.Add(new RefreshToken
++        {
++            UserId = user.Id,
++            TokenHash = refreshHash,
++            ExpiresAt = DateTimeOffset.UtcNow.AddDays(int.TryParse(_cfg["Jwt:RefreshTokenDays"], out var d) ? d : 30),
++            CreatedIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
++            UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
++        });
++
++        await _db.SaveChangesAsync(ct);
++
++        return new AuthResponse(access, refresh, RequiresEmailVerification: false, IsSuspended: user.IsSuspended, Me(user));
++    }
++
+     private async Task SendVerificationEmailInternalAsync(User user, CancellationToken ct)
+     {
+         // invalidate previous active tokens (optional)
+         var active = await _db.EmailVerificationTokens.Where(x => x.UserId == user.Id && x.UsedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow).ToListAsync(ct);
+         foreach (var a in active) a.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+ 
+         var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+         var hash = _tokens.HashToken(token);
+         var hours = int.TryParse(_cfg["Email:Verification:TokenHours"], out var h) ? h : 24;
+ 
+         _db.EmailVerificationTokens.Add(new EmailVerificationToken
+         {
+             UserId = user.Id,
+             TokenHash = hash,
+             ExpiresAt = DateTimeOffset.UtcNow.AddHours(hours)
+         });
+ 
+         await _db.SaveChangesAsync(ct);
+ 
+         var webBase = _cfg["Email:Verification:WebBaseUrl"] ?? "http://localhost:5173";
+         var link = $"{webBase.TrimEnd('/')}/verify-email?token={Uri.EscapeDataString(token)}";
+ 
+         var body = $@"
+ <p>Hi {System.Net.WebUtility.HtmlEncode(user.DisplayName)},</p>
+ <p>Please verify your email to create or book trips.</p>
+ <p><a href=""{link}"">Verify Email</a></p>
+ <p>If you did not request this, you can ignore this email.</p>";
+ 
+         await _email.SendAsync(user.Email, "Verify your TripShare email", body, ct);
+         _log.LogInformation("Verification email queued for {Email}", user.Email);
+     }
+ 
+     private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.Role);
++
++    private static string NormalizePhone(string phone)
++    {
++        var trimmed = phone.Trim();
++        if (trimmed.StartsWith("00")) trimmed = "+" + trimmed[2..];
++        return trimmed.Replace(" ", "").Replace("-", "");
++    }
++
++    private static string TrimForDisplay(string phone)
++    {
++        var digits = new string(phone.Where(char.IsDigit).ToArray());
++        return digits.Length >= 4 ? digits[^4..] : digits;
++    }
+ }

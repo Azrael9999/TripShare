@@ -1,0 +1,30 @@
+diff a/src/TripShare.Api/appsettings.Development.json b/src/TripShare.Api/appsettings.Development.json	(rejected hunks)
+@@ -1,17 +1,26 @@
+ {
+   "ConnectionStrings": {
+     "Default": "Server=localhost,1433;Database=TripShareDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;"
+   },
+   "Email": {
+     "Mode": "DevFile",
+     "Verification": {
+       "WebBaseUrl": "http://localhost:5173"
+     },
+     "DevFileOutputDir": "App_Data/dev-emails"
+   },
++  "Sms": {
++    "Provider": "TextLk",
++    "OtpMinutes": 10,
++    "TextLk": {
++      "ApiKey": "DEV_API_KEY",
++      "SenderId": "TripShare",
++      "Endpoint": "https://app.text.lk/api/v3/sms/send"
++    }
++  },
+   "Cors": {
+     "AllowedOrigins": [
+       "http://localhost:5173"
+     ]
+   }
+-}
+\ No newline at end of file
++}

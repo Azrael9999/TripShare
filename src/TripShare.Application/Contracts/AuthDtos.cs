@@ -21,3 +21,7 @@ public sealed record UserMeDto(
     bool IsDriver,
     string Role
 );
+
+public sealed record SmsOtpRequest(string PhoneNumber);
+
+public sealed record SmsOtpVerifyRequest(string PhoneNumber, string Otp);

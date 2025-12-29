@@ -25,7 +25,7 @@
         </RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
-        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='Admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
       </nav>
 
       <div class="flex items-center gap-2">
@@ -62,12 +62,40 @@
           </div>
           <button class="btn-ghost" @click="openLogin=false"><XMarkIcon class="h-5 w-5"/></button>
         </div>
-        <div class="mt-5">
-          <GoogleSignIn @success="onGoogleSuccess" />
+        <div class="mt-5 space-y-4">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Google</p>
+            <GoogleSignIn @success="onGoogleSuccess" />
+          </div>
+          <div class="border-t border-slate-100 pt-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">SMS OTP</p>
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <label class="block text-xs text-slate-600">Phone number</label>
+                <input v-model="smsPhone" class="input" placeholder="+94..." />
+              </div>
+              <div class="flex items-center gap-3">
+                <button class="btn-secondary" :disabled="sendingOtp || !smsPhone" @click="sendSmsOtp">
+                  <span v-if="sendingOtp">Sending...</span>
+                  <span v-else>Send code</span>
+                </button>
+                <span v-if="otpSent" class="text-xs text-green-700">Code sent</span>
+              </div>
+              <div class="space-y-1">
+                <label class="block text-xs text-slate-600">Enter code</label>
+                <input v-model="smsOtp" class="input" placeholder="6-digit code" />
+              </div>
+              <button class="btn-primary w-full" :disabled="verifying || !smsOtp" @click="verifySms">
+                <span v-if="verifying">Verifying...</span>
+                <span v-else>Sign in with SMS</span>
+              </button>
+              <p v-if="smsError" class="text-xs text-red-600">{{ smsError }}</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500">
+            By continuing you agree to the Terms and Privacy Policy (placeholders).
+          </p>
         </div>
-        <p class="text-xs text-slate-500 mt-4">
-          By continuing you agree to the Terms and Privacy Policy (placeholders).
-        </p>
       </div>
     </div>
   </header>
@@ -88,6 +116,12 @@ import {
 const auth = useAuthStore()
 const openLogin = ref(false)
 const unreadCount = ref(0)
+const smsPhone = ref('')
+const smsOtp = ref('')
+const otpSent = ref(false)
+const smsError = ref('')
+const sendingOtp = ref(false)
+const verifying = ref(false)
 
 async function refreshUnread() {
   if (!auth.isAuthenticated) { unreadCount.value = 0; return }
@@ -104,6 +138,33 @@ async function onGoogleSuccess(idToken: string) {
   await auth.googleLogin(idToken)
   openLogin.value = false
   await refreshUnread()
+}
+
+async function sendSmsOtp() {
+  smsError.value = ''
+  sendingOtp.value = true
+  try {
+    await auth.requestSmsOtp(smsPhone.value)
+    otpSent.value = true
+  } catch (err: any) {
+    smsError.value = err?.response?.data?.message ?? 'Failed to send code. Try again.'
+  } finally {
+    sendingOtp.value = false
+  }
+}
+
+async function verifySms() {
+  smsError.value = ''
+  verifying.value = true
+  try {
+    await auth.verifySmsOtp(smsPhone.value, smsOtp.value)
+    openLogin.value = false
+    await refreshUnread()
+  } catch (err: any) {
+    smsError.value = err?.response?.data?.message ?? 'Invalid code.'
+  } finally {
+    verifying.value = false
+  }
 }
 
 onMounted(() => { refreshUnread() })

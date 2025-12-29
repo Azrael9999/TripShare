@@ -894,10 +894,48 @@ index bd6eb265a2ed15773e4e82b041d610906bdf8013..74501db8dd10e95d656c2a90855ddc59
      }
  }
 diff --git a/src/tripshare-web/src/components/TopNav.vue b/src/tripshare-web/src/components/TopNav.vue
-index 69a25ff1614c36505df0c0b3252efe0fa1c7b5d8..85251b72387325668b98d04a3dbff36fbbee2479 100644
+index 69a25ff1614c36505df0c0b3252efe0fa1c7b5d8..4b40734dff5115825bdb1772f9509e26ca7871f9 100644
 --- a/src/tripshare-web/src/components/TopNav.vue
 +++ b/src/tripshare-web/src/components/TopNav.vue
-@@ -40,72 +40,133 @@
+@@ -3,109 +3,170 @@
+     <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
+       <RouterLink to="/" class="flex items-center gap-3">
+         <div class="h-9 w-9 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 shadow-soft flex items-center justify-center">
+           <span class="text-white font-semibold text-sm">TS</span>
+         </div>
+         <div class="leading-tight">
+           <div class="font-semibold">TripShare</div>
+           <div class="text-xs text-slate-500">Carpool, simplified</div>
+         </div>
+       </RouterLink>
+ 
+       <nav class="hidden md:flex items-center gap-1">
+         <RouterLink to="/" class="btn-ghost">Explore</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/create" class="btn-ghost">Create</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/my-trips" class="btn-ghost">My Trips</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/bookings" class="btn-ghost">Bookings</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/notifications" class="btn-ghost">
+           <span class="inline-flex items-center gap-2">
+             <BellIcon class="h-5 w-5"/>
+             <span>Alerts</span>
+             <span v-if="unreadCount>0" class="ml-1 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-brand-600 text-white text-xs">{{ unreadCount }}</span>
+           </span>
+         </RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
+-        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='Admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
++        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
+       </nav>
+ 
+       <div class="flex items-center gap-2">
+         <button v-if="!auth.isAuthenticated" class="btn-primary" @click="openLogin=true">
+           <ArrowRightOnRectangleIcon class="h-5 w-5 mr-2"/> Sign in
+         </button>
+         <RouterLink v-else to="/profile" class="btn-outline flex items-center gap-2">
+           <img v-if="auth.me?.photoUrl" :src="auth.me?.photoUrl" class="h-7 w-7 rounded-full object-cover" />
+           <UserCircleIcon v-else class="h-6 w-6 text-slate-500" />
+           <span class="hidden sm:inline">{{ auth.me?.displayName }}</span>
+         </RouterLink>
        </div>
      </div>
  
@@ -1036,11 +1074,121 @@ index 69a25ff1614c36505df0c0b3252efe0fa1c7b5d8..85251b72387325668b98d04a3dbff36f
  onMounted(() => { refreshUnread() })
  watch(() => auth.isAuthenticated, () => { refreshUnread() })
  </script>
+diff --git a/src/tripshare-web/src/router/index.ts b/src/tripshare-web/src/router/index.ts
+index 98118223fead3067db221024c66e38134a115bed..8a9aaf3c883c762bc05034f1a07771d2c96a7788 100644
+--- a/src/tripshare-web/src/router/index.ts
++++ b/src/tripshare-web/src/router/index.ts
+@@ -21,31 +21,31 @@ const router = createRouter({
+     { path: '/create', component: CreateTrip, meta: { requiresAuth: true, requiresVerified: true } },
+     { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true } },
+     { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true } },
+     { path: '/notifications', component: Notifications, meta: { requiresAuth: true } },
+     { path: '/profile', component: Profile, meta: { requiresAuth: true } },
+     { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true } },
+     { path: '/safety', component: Safety, meta: { requiresAuth: true } },
+     { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true } },
+     { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true } },
+     { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true } }
+   ]
+ })
+ 
+ router.beforeEach(async (to) => {
+   const auth = useAuthStore()
+   if (!auth.initialized) await auth.init()
+ 
+   if ((to.meta as any)?.requiresAuth && !auth.isAuthenticated) {
+     return { path: '/', query: { login: '1' } }
+   }
+ 
+   if ((to.meta as any)?.requiresVerified && auth.isAuthenticated && !auth.me?.emailVerified) {
+     return { path: '/profile', query: { verify: '1' } }
+   }
+ 
+-  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'Admin') {
++  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin') {
+     return { path: '/' }
+   }
+ })
+ 
+ export default router
 diff --git a/src/tripshare-web/src/stores/auth.ts b/src/tripshare-web/src/stores/auth.ts
-index 9ef97086a4c01de977639deada1860ca197f3c35..bbd9170f16cc369123d475e094a7c00921deb209 100644
+index 9ef97086a4c01de977639deada1860ca197f3c35..99fe3526a8af4e18e11514f2185eeedf7b9c6356 100644
 --- a/src/tripshare-web/src/stores/auth.ts
 +++ b/src/tripshare-web/src/stores/auth.ts
-@@ -64,41 +64,53 @@ export const useAuthStore = defineStore('auth', {
+@@ -1,104 +1,124 @@
+ import { defineStore } from 'pinia'
+ import { http } from '../lib/api'
+ 
+ export type Me = {
+   id: string
+   email: string
+   emailVerified: boolean
+   displayName: string
+   photoUrl?: string
+   isDriver: boolean
+-  role: 'User' | 'Admin'
++  role: Role
+   ratingAverage?: number
+   verified?: boolean
+ }
+ 
++type Role = 'user' | 'admin'
++
+ type AuthResponse = {
+   accessToken: string
+   refreshToken: string
+   me: Me
+ }
+ 
+ const LS_KEY = 'tripshare.auth.v1'
+ 
+ export const useAuthStore = defineStore('auth', {
+   state: () => ({
+     accessToken: '' as string,
+     refreshToken: '' as string,
+     me: null as Me | null,
+     initialized: false
+   }),
+   getters: {
+     isAuthenticated: (s) => !!s.accessToken && !!s.me
+   },
+   actions: {
++    normalizeMe(raw: any): Me {
++      const rawRole = (raw?.role ?? '').toString().toLowerCase()
++      const role: Role = rawRole === 'admin' ? 'admin' : 'user'
++      return { ...raw, role }
++    },
++
+     async init() {
+       try {
+         const raw = localStorage.getItem(LS_KEY)
+         if (raw) {
+           const parsed = JSON.parse(raw)
+           this.accessToken = parsed.accessToken ?? ''
+           this.refreshToken = parsed.refreshToken ?? ''
+-          this.me = parsed.me ?? null
++          this.me = parsed.me ? this.normalizeMe(parsed.me) : null
+         }
+       } catch {
+         // ignore
+       }
+       this.initialized = true
+ 
+       // if tokens exist, refresh me silently
+       if (this.accessToken && this.me) {
+         try {
+           await this.loadMe()
+         } catch {
+           // token may be stale; try refresh once
+           if (this.refreshToken) {
+             try {
+               await this.refresh()
+               await this.loadMe()
+             } catch {
+               this.logout()
+             }
+           }
+         }
        }
      },
  
@@ -1062,10 +1210,11 @@ index 9ef97086a4c01de977639deada1860ca197f3c35..bbd9170f16cc369123d475e094a7c009
        const resp = await http.post<AuthResponse>('/auth/google', { idToken })
        this.accessToken = resp.data.accessToken
        this.refreshToken = resp.data.refreshToken
-       this.me = resp.data.me
-       this.persist()
-     },
- 
+-      this.me = resp.data.me
++      this.me = this.normalizeMe(resp.data.me)
++      this.persist()
++    },
++
 +    async requestSmsOtp(phoneNumber: string) {
 +      await http.post('/auth/sms/request', { phoneNumber })
 +    },
@@ -1074,22 +1223,24 @@ index 9ef97086a4c01de977639deada1860ca197f3c35..bbd9170f16cc369123d475e094a7c009
 +      const resp = await http.post<AuthResponse>('/auth/sms/verify', { phoneNumber, otp })
 +      this.accessToken = resp.data.accessToken
 +      this.refreshToken = resp.data.refreshToken
-+      this.me = resp.data.me
-+      this.persist()
-+    },
-+
++      this.me = this.normalizeMe(resp.data.me)
+       this.persist()
+     },
+ 
      async refresh() {
        if (!this.refreshToken) throw new Error('No refresh token')
        const resp = await http.post<AuthResponse>('/auth/refresh', { refreshToken: this.refreshToken })
        this.accessToken = resp.data.accessToken
        this.refreshToken = resp.data.refreshToken
-       this.me = resp.data.me
+-      this.me = resp.data.me
++      this.me = this.normalizeMe(resp.data.me)
        this.persist()
      },
  
      async loadMe() {
        const resp = await http.get<Me>('/users/me')
-       this.me = resp.data
+-      this.me = resp.data
++      this.me = this.normalizeMe(resp.data)
        this.persist()
      }
    }

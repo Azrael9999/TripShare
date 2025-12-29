@@ -22,4 +22,17 @@ public sealed class AuthController : ControllerBase
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshRequest req, CancellationToken ct)
         => Ok(await _auth.RefreshAsync(req, ct));
+
+    [HttpPost("sms/request")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult> RequestSmsOtp([FromBody] SmsOtpRequest req, CancellationToken ct)
+    {
+        await _auth.RequestSmsOtpAsync(req, ct);
+        return Accepted();
+    }
+
+    [HttpPost("sms/verify")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AuthResponse>> VerifySmsOtp([FromBody] SmsOtpVerifyRequest req, CancellationToken ct)
+        => Ok(await _auth.VerifySmsOtpAsync(req, ct));
 }

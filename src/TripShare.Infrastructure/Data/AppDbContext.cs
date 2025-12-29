@@ -10,6 +10,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
+    public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
 
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
@@ -34,6 +35,7 @@ public sealed class AppDbContext : DbContext
         {
             b.HasIndex(x => x.Email).IsUnique();
             b.HasIndex(x => new { x.AuthProvider, x.ProviderUserId }).IsUnique();
+            b.HasIndex(x => x.PhoneNumber);
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.DisplayName).HasMaxLength(120);
             b.Property(x => x.Role).HasMaxLength(32);
@@ -108,6 +110,13 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<Rating>(b =>
         {
             b.HasIndex(x => new { x.BookingId, x.FromUserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<SmsOtpToken>(b =>
+        {
+            b.HasIndex(x => x.UserId);
+            b.HasIndex(x => x.PhoneNumber);
+            b.Property(x => x.PhoneNumber).HasMaxLength(64);
         });
     }
 }

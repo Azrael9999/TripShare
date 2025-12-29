@@ -1,0 +1,102 @@
+diff --git a/src/tripshare-web/src/components/TopNav.vue b/src/tripshare-web/src/components/TopNav.vue
+index 85251b7..4b40734 100644
+--- a/src/tripshare-web/src/components/TopNav.vue
++++ b/src/tripshare-web/src/components/TopNav.vue
+@@ -25,7 +25,7 @@
+         </RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
+         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
+-        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='Admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
++        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
+       </nav>
+ 
+       <div class="flex items-center gap-2">
+diff --git a/src/tripshare-web/src/router/index.ts b/src/tripshare-web/src/router/index.ts
+index 9811822..8a9aaf3 100644
+--- a/src/tripshare-web/src/router/index.ts
++++ b/src/tripshare-web/src/router/index.ts
+@@ -43,7 +43,7 @@ router.beforeEach(async (to) => {
+     return { path: '/profile', query: { verify: '1' } }
+   }
+ 
+-  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'Admin') {
++  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin') {
+     return { path: '/' }
+   }
+ })
+diff --git a/src/tripshare-web/src/stores/auth.ts b/src/tripshare-web/src/stores/auth.ts
+index bbd9170..99fe352 100644
+--- a/src/tripshare-web/src/stores/auth.ts
++++ b/src/tripshare-web/src/stores/auth.ts
+@@ -8,11 +8,13 @@ export type Me = {
+   displayName: string
+   photoUrl?: string
+   isDriver: boolean
+-  role: 'User' | 'Admin'
++  role: Role
+   ratingAverage?: number
+   verified?: boolean
+ }
+ 
++type Role = 'user' | 'admin'
++
+ type AuthResponse = {
+   accessToken: string
+   refreshToken: string
+@@ -32,6 +34,12 @@ export const useAuthStore = defineStore('auth', {
+     isAuthenticated: (s) => !!s.accessToken && !!s.me
+   },
+   actions: {
++    normalizeMe(raw: any): Me {
++      const rawRole = (raw?.role ?? '').toString().toLowerCase()
++      const role: Role = rawRole === 'admin' ? 'admin' : 'user'
++      return { ...raw, role }
++    },
++
+     async init() {
+       try {
+         const raw = localStorage.getItem(LS_KEY)
+@@ -39,7 +47,7 @@ export const useAuthStore = defineStore('auth', {
+           const parsed = JSON.parse(raw)
+           this.accessToken = parsed.accessToken ?? ''
+           this.refreshToken = parsed.refreshToken ?? ''
+-          this.me = parsed.me ?? null
++          this.me = parsed.me ? this.normalizeMe(parsed.me) : null
+         }
+       } catch {
+         // ignore
+@@ -82,7 +90,7 @@ export const useAuthStore = defineStore('auth', {
+       const resp = await http.post<AuthResponse>('/auth/google', { idToken })
+       this.accessToken = resp.data.accessToken
+       this.refreshToken = resp.data.refreshToken
+-      this.me = resp.data.me
++      this.me = this.normalizeMe(resp.data.me)
+       this.persist()
+     },
+ 
+@@ -94,7 +102,7 @@ export const useAuthStore = defineStore('auth', {
+       const resp = await http.post<AuthResponse>('/auth/sms/verify', { phoneNumber, otp })
+       this.accessToken = resp.data.accessToken
+       this.refreshToken = resp.data.refreshToken
+-      this.me = resp.data.me
++      this.me = this.normalizeMe(resp.data.me)
+       this.persist()
+     },
+ 
+@@ -103,13 +111,13 @@ export const useAuthStore = defineStore('auth', {
+       const resp = await http.post<AuthResponse>('/auth/refresh', { refreshToken: this.refreshToken })
+       this.accessToken = resp.data.accessToken
+       this.refreshToken = resp.data.refreshToken
+-      this.me = resp.data.me
++      this.me = this.normalizeMe(resp.data.me)
+       this.persist()
+     },
+ 
+     async loadMe() {
+       const resp = await http.get<Me>('/users/me')
+-      this.me = resp.data
++      this.me = this.normalizeMe(resp.data)
+       this.persist()
+     }
+   }
+ })

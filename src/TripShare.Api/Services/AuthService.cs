@@ -12,6 +12,7 @@ public sealed class AuthService
     private readonly ITokenService _tokens;
     private readonly IGoogleIdTokenValidator _google;
     private readonly IEmailSender _email;
+    private readonly ISmsSender _sms;
     private readonly IConfiguration _cfg;
     private readonly ILogger<AuthService> _log;
     private readonly IHttpContextAccessor _http;
@@ -21,6 +22,7 @@ public sealed class AuthService
         ITokenService tokens,
         IGoogleIdTokenValidator google,
         IEmailSender email,
+        ISmsSender sms,
         IConfiguration cfg,
         ILogger<AuthService> log,
         IHttpContextAccessor http)
@@ -29,6 +31,7 @@ public sealed class AuthService
         _tokens = tokens;
         _google = google;
         _email = email;
+        _sms = sms;
         _cfg = cfg;
         _log = log;
         _http = http;
@@ -149,6 +152,101 @@ public sealed class AuthService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task RequestSmsOtpAsync(SmsOtpRequest req, CancellationToken ct)
+    {
+        var phone = NormalizePhone(req.PhoneNumber);
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new InvalidOperationException("Phone number is required.");
+
+        var expiryMinutes = int.TryParse(_cfg["Sms:OtpMinutes"], out var m) ? m : 10;
+
+        var user = await _db.Users.SingleOrDefaultAsync(x => x.PhoneNumber == phone, ct);
+        if (user is null)
+        {
+            var digits = new string(phone.Where(char.IsDigit).ToArray());
+            var aliasEmail = $"sms{digits}@tripshare-sms.local";
+            var display = $"User {TrimForDisplay(phone)}";
+            user = new User
+            {
+                Email = aliasEmail,
+                DisplayName = display,
+                PhoneNumber = phone,
+                AuthProvider = "sms",
+                ProviderUserId = phone,
+                EmailVerified = false
+            };
+            _db.Users.Add(user);
+        }
+        else if (user.IsSuspended)
+        {
+            throw new InvalidOperationException("Account is suspended.");
+        }
+
+        var active = await _db.SmsOtpTokens
+            .Where(x => x.UserId == user.Id && x.UsedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow)
+            .ToListAsync(ct);
+        foreach (var a in active) a.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var otp = Random.Shared.Next(100000, 999999).ToString();
+        var hash = _tokens.HashToken(otp);
+        _db.SmsOtpTokens.Add(new SmsOtpToken
+        {
+            UserId = user.Id,
+            PhoneNumber = phone,
+            TokenHash = hash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
+        });
+
+        await _db.SaveChangesAsync(ct);
+
+        var msg = $"Your TripShare code is {otp}. It expires in {expiryMinutes} minutes.";
+        await _sms.SendAsync(phone, msg, ct);
+        _log.LogInformation("SMS OTP sent to {Phone}", phone);
+    }
+
+    public async Task<AuthResponse> VerifySmsOtpAsync(SmsOtpVerifyRequest req, CancellationToken ct)
+    {
+        var phone = NormalizePhone(req.PhoneNumber);
+        var otp = req.Otp?.Trim();
+        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(otp))
+            throw new InvalidOperationException("Phone and OTP are required.");
+
+        var hash = _tokens.HashToken(otp);
+        var token = await _db.SmsOtpTokens
+            .Include(x => x.User)
+            .Where(x => x.PhoneNumber == phone && x.TokenHash == hash && x.UsedAt == null)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (token?.User is null || !token.IsValid)
+            throw new InvalidOperationException("Invalid or expired code.");
+
+        token.UsedAt = DateTimeOffset.UtcNow;
+
+        var user = token.User;
+        if (user.IsSuspended)
+            throw new InvalidOperationException("Account is suspended.");
+        user.PhoneNumber ??= phone;
+        user.PhoneVerified = true;
+        user.EmailVerified = true; // treat verified phone as verified gate
+        user.LastLoginAt = DateTimeOffset.UtcNow;
+
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var (refresh, refreshHash) = _tokens.CreateRefreshToken();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = refreshHash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(int.TryParse(_cfg["Jwt:RefreshTokenDays"], out var d) ? d : 30),
+            CreatedIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
+        });
+
+        await _db.SaveChangesAsync(ct);
+
+        return new AuthResponse(access, refresh, RequiresEmailVerification: false, IsSuspended: user.IsSuspended, Me(user));
+    }
+
     private async Task SendVerificationEmailInternalAsync(User user, CancellationToken ct)
     {
         // invalidate previous active tokens (optional)
@@ -182,4 +280,17 @@ public sealed class AuthService
     }
 
     private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.Role);
+
+    private static string NormalizePhone(string phone)
+    {
+        var trimmed = phone.Trim();
+        if (trimmed.StartsWith("00")) trimmed = "+" + trimmed[2..];
+        return trimmed.Replace(" ", "").Replace("-", "");
+    }
+
+    private static string TrimForDisplay(string phone)
+    {
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        return digits.Length >= 4 ? digits[^4..] : digits;
+    }
 }

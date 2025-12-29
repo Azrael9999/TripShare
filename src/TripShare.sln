@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.00000.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TripShare.Api", "TripShare.Api\TripShare.Api.csproj", "{616709C7-D336-4CB2-BF4A-F1DAADB772F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TripShare.Domain", "TripShare.Domain\TripShare.Domain.csproj", "{8A20A879-53EC-4697-A4E8-A6B67B1BE23C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TripShare.Application", "TripShare.Application\TripShare.Application.csproj", "{A7D7731B-3F3A-48DF-82ED-E0FD4452459D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TripShare.Infrastructure", "TripShare.Infrastructure\TripShare.Infrastructure.csproj", "{850CF77E-B4C9-4EBB-9572-2AAB0F0719F0}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {616709C7-D336-4CB2-BF4A-F1DAADB772F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {616709C7-D336-4CB2-BF4A-F1DAADB772F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {616709C7-D336-4CB2-BF4A-F1DAADB772F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {616709C7-D336-4CB2-BF4A-F1DAADB772F8}.Release|Any CPU.Build.0 = Release|Any CPU
+        {8A20A879-53EC-4697-A4E8-A6B67B1BE23C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {8A20A879-53EC-4697-A4E8-A6B67B1BE23C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {8A20A879-53EC-4697-A4E8-A6B67B1BE23C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {8A20A879-53EC-4697-A4E8-A6B67B1BE23C}.Release|Any CPU.Build.0 = Release|Any CPU
+        {A7D7731B-3F3A-48DF-82ED-E0FD4452459D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {A7D7731B-3F3A-48DF-82ED-E0FD4452459D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {A7D7731B-3F3A-48DF-82ED-E0FD4452459D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A7D7731B-3F3A-48DF-82ED-E0FD4452459D}.Release|Any CPU.Build.0 = Release|Any CPU
+        {850CF77E-B4C9-4EBB-9572-2AAB0F0719F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {850CF77E-B4C9-4EBB-9572-2AAB0F0719F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {850CF77E-B4C9-4EBB-9572-2AAB0F0719F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {850CF77E-B4C9-4EBB-9572-2AAB0F0719F0}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal

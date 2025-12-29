@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  api:
+    build:
+      context: .
+      dockerfile: src/TripShare.Api/Dockerfile
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Cors__AllowedOrigins__0=${WEB_ORIGIN}
+      - Email__Mode=${EMAIL_MODE}
+      - Email__FromEmail=${EMAIL_FROM}
+      - Email__FromName=${EMAIL_FROM_NAME}
+      - Email__SmtpHost=${SMTP_HOST}
+      - Email__SmtpPort=${SMTP_PORT}
+      - Email__SmtpUser=${SMTP_USER}
+      - Email__SmtpPass=${SMTP_PASS}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: .
+      dockerfile: src/tripshare-web/Dockerfile.prod
+      args:
+        - VITE_API_BASE=${VITE_API_BASE}
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  mssql_data:

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore backend
+        run: dotnet restore TripShare.sln
+
+      - name: Build backend
+        run: dotnet build TripShare.sln -c Release --no-restore
+
+      - name: Test (if any)
+        run: dotnet test TripShare.sln -c Release --no-build
+        continue-on-error: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend deps
+        working-directory: src/tripshare-web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/tripshare-web
+        run: npm run build

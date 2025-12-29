@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Your_password123
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+  api:
+    build:
+      context: .
+      dockerfile: src/TripShare.Api/Dockerfile
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Default=Server=db,1433;Database=TripShareDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+  web:
+    build:
+      context: .
+      dockerfile: src/tripshare-web/Dockerfile
+    environment:
+      - VITE_API_BASE=http://localhost:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  mssql_data:

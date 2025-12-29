@@ -26,6 +26,7 @@ A production-oriented starter for a ride sharing / carpool app.
 - Logging
   - Serilog console + rolling file logs under `TripShare.Api/Logs/`
   - correlation id header: `X-Correlation-Id`
+- SMS OTP via Text.lk (phone-based login / verification)
 
 ## Run locally (Visual Studio 2022)
 ### 1) Database
@@ -65,6 +66,16 @@ Frontend runs on:
 - Open that file and click the verification link.
 - Once verified, you can create trips and book.
 
+## SMS OTP (Text.lk)
+- Configure `Sms` in `src/TripShare.Api/appsettings*.json` (or environment variables):
+  - `Sms:Provider=TextLk`
+  - `Sms:TextLk:ApiKey`, `Sms:TextLk:SenderId`, optional `Sms:TextLk:Endpoint`
+  - `Sms:OtpMinutes` controls OTP expiry.
+- Endpoints:
+  - `POST /api/auth/sms/request` `{ phoneNumber }`
+  - `POST /api/auth/sms/verify` `{ phoneNumber, otp }`
+- Frontend login modal now supports SMS alongside Google.
+
 ## Ads (non-invasive)
 The UI includes **placeholder ad slots** in:
 - Home sidebar
@@ -82,6 +93,7 @@ Replace `AdSlot.vue` with your ad provider integration (AdSense, etc.). Keep it 
   - `Jwt:SigningKey`
   - SMTP credentials (if switching Email Mode to SMTP)
   - Google Client IDs
+  - Text.lk API credentials (`Sms:TextLk:ApiKey`, `Sms:TextLk:SenderId`)
 
 ## Docker (optional)
 `docker-compose.yml` brings up:

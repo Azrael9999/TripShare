@@ -59,6 +59,8 @@ builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddHttpClient();
+
 // Rate limiting for auth endpoints (simple baseline)
 builder.Services.AddRateLimiter(opt =>
 {
@@ -104,6 +106,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
 builder.Services.AddScoped<IEmailSender, EmailSenderFactory>();
+builder.Services.AddScoped<ISmsSender, TextLkSmsSender>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TripService>();
 builder.Services.AddScoped<BookingService>();

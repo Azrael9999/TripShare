@@ -86,6 +86,18 @@ export const useAuthStore = defineStore('auth', {
       this.persist()
     },
 
+    async requestSmsOtp(phoneNumber: string) {
+      await http.post('/auth/sms/request', { phoneNumber })
+    },
+
+    async verifySmsOtp(phoneNumber: string, otp: string) {
+      const resp = await http.post<AuthResponse>('/auth/sms/verify', { phoneNumber, otp })
+      this.accessToken = resp.data.accessToken
+      this.refreshToken = resp.data.refreshToken
+      this.me = resp.data.me
+      this.persist()
+    },
+
     async refresh() {
       if (!this.refreshToken) throw new Error('No refresh token')
       const resp = await http.post<AuthResponse>('/auth/refresh', { refreshToken: this.refreshToken })

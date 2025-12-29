@@ -10,6 +10,7 @@ public sealed class User
     public string DisplayName { get; set; } = "";
     public string? PhotoUrl { get; set; }
     public string? PhoneNumber { get; set; }
+    public bool PhoneVerified { get; set; }
 
     public string AuthProvider { get; set; } = "google";
     public string ProviderUserId { get; set; } = ""; // google 'sub'

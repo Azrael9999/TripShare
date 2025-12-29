@@ -43,7 +43,7 @@ router.beforeEach(async (to) => {
     return { path: '/profile', query: { verify: '1' } }
   }
 
-  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'Admin') {
+  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin') {
     return { path: '/' }
   }
 })

@@ -8,10 +8,12 @@ export type Me = {
   displayName: string
   photoUrl?: string
   isDriver: boolean
-  role: 'User' | 'Admin'
+  role: Role
   ratingAverage?: number
   verified?: boolean
 }
+
+type Role = 'user' | 'admin'
 
 type AuthResponse = {
   accessToken: string
@@ -32,6 +34,12 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (s) => !!s.accessToken && !!s.me
   },
   actions: {
+    normalizeMe(raw: any): Me {
+      const rawRole = (raw?.role ?? '').toString().toLowerCase()
+      const role: Role = rawRole === 'admin' ? 'admin' : 'user'
+      return { ...raw, role }
+    },
+
     async init() {
       try {
         const raw = localStorage.getItem(LS_KEY)
@@ -39,7 +47,7 @@ export const useAuthStore = defineStore('auth', {
           const parsed = JSON.parse(raw)
           this.accessToken = parsed.accessToken ?? ''
           this.refreshToken = parsed.refreshToken ?? ''
-          this.me = parsed.me ?? null
+          this.me = parsed.me ? this.normalizeMe(parsed.me) : null
         }
       } catch {
         // ignore
@@ -82,7 +90,7 @@ export const useAuthStore = defineStore('auth', {
       const resp = await http.post<AuthResponse>('/auth/google', { idToken })
       this.accessToken = resp.data.accessToken
       this.refreshToken = resp.data.refreshToken
-      this.me = resp.data.me
+      this.me = this.normalizeMe(resp.data.me)
       this.persist()
     },
 
@@ -94,7 +102,7 @@ export const useAuthStore = defineStore('auth', {
       const resp = await http.post<AuthResponse>('/auth/sms/verify', { phoneNumber, otp })
       this.accessToken = resp.data.accessToken
       this.refreshToken = resp.data.refreshToken
-      this.me = resp.data.me
+      this.me = this.normalizeMe(resp.data.me)
       this.persist()
     },
 
@@ -103,13 +111,13 @@ export const useAuthStore = defineStore('auth', {
       const resp = await http.post<AuthResponse>('/auth/refresh', { refreshToken: this.refreshToken })
       this.accessToken = resp.data.accessToken
       this.refreshToken = resp.data.refreshToken
-      this.me = resp.data.me
+      this.me = this.normalizeMe(resp.data.me)
       this.persist()
     },
 
     async loadMe() {
       const resp = await http.get<Me>('/users/me')
-      this.me = resp.data
+      this.me = this.normalizeMe(resp.data)
       this.persist()
     }
   }

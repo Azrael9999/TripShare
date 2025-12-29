@@ -1,0 +1,40 @@
+diff a/src/TripShare.Api/Controllers/AuthController.cs b/src/TripShare.Api/Controllers/AuthController.cs	(rejected hunks)
+@@ -1,25 +1,38 @@
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.AspNetCore.RateLimiting;
+ using TripShare.Application.Contracts;
+ using TripShare.Api.Services;
+ 
+ namespace TripShare.Api.Controllers;
+ 
+ [ApiController]
+ [Route("api/auth")]
+ public sealed class AuthController : ControllerBase
+ {
+     private readonly AuthService _auth;
+ 
+     public AuthController(AuthService auth) => _auth = auth;
+ 
+     [HttpPost("google")]
+     [EnableRateLimiting("auth")]
+     public async Task<ActionResult<AuthResponse>> Google([FromBody] GoogleLoginRequest req, CancellationToken ct)
+         => Ok(await _auth.GoogleLoginAsync(req, ct));
+ 
+     [HttpPost("refresh")]
+     [EnableRateLimiting("auth")]
+     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshRequest req, CancellationToken ct)
+         => Ok(await _auth.RefreshAsync(req, ct));
++
++    [HttpPost("sms/request")]
++    [EnableRateLimiting("auth")]
++    public async Task<ActionResult> RequestSmsOtp([FromBody] SmsOtpRequest req, CancellationToken ct)
++    {
++        await _auth.RequestSmsOtpAsync(req, ct);
++        return Accepted();
++    }
++
++    [HttpPost("sms/verify")]
++    [EnableRateLimiting("auth")]
++    public async Task<ActionResult<AuthResponse>> VerifySmsOtp([FromBody] SmsOtpVerifyRequest req, CancellationToken ct)
++        => Ok(await _auth.VerifySmsOtpAsync(req, ct));
+ }

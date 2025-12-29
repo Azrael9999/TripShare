@@ -1,0 +1,100 @@
+diff a/src/TripShare.Api/Program.cs b/src/TripShare.Api/Program.cs	(rejected hunks)
+@@ -37,95 +37,98 @@ builder.Services.AddCors(options =>
+         if (builder.Environment.IsDevelopment() || origins.Length == 0)
+         {
+             // Dev-friendly default: Vue dev server + Swagger UI usage
+             policy
+                 .AllowAnyHeader()
+                 .AllowAnyMethod()
+                 .SetIsOriginAllowed(_ => true)
+                 .AllowCredentials();
+         }
+         else
+         {
+             policy
+                 .WithOrigins(origins)
+                 .AllowAnyHeader()
+                 .AllowAnyMethod()
+                 .AllowCredentials();
+         }
+     });
+ });
+ 
+ builder.Services.AddHealthChecks();
+ 
+ builder.Services.AddEndpointsApiExplorer();
+ builder.Services.AddSwaggerGen();
+ 
++builder.Services.AddHttpClient();
++
+ // Rate limiting for auth endpoints (simple baseline)
+ builder.Services.AddRateLimiter(opt =>
+ {
+     opt.AddPolicy("auth", context =>
+         RateLimitPartition.GetFixedWindowLimiter(
+             partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+             factory: _ => new FixedWindowRateLimiterOptions
+             {
+                 PermitLimit = 20,
+                 Window = TimeSpan.FromMinutes(1),
+                 QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                 QueueLimit = 0
+             }));
+ });
+ 
+ // EF Core
+ builder.Services.AddDbContext<AppDbContext>(opt =>
+ {
+     opt.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+ });
+ 
+ // Auth
+ var jwt = builder.Configuration.GetSection("Jwt");
+ var signingKey = jwt["SigningKey"] ?? throw new InvalidOperationException("Jwt:SigningKey missing");
+ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+     .AddJwtBearer(opt =>
+     {
+         opt.TokenValidationParameters = new TokenValidationParameters
+         {
+             ValidateIssuer = true,
+             ValidateAudience = true,
+             ValidateIssuerSigningKey = true,
+             ValidIssuer = jwt["Issuer"],
+             ValidAudience = jwt["Audience"],
+             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+             ClockSkew = TimeSpan.FromSeconds(30)
+         };
+     });
+ 
+ builder.Services.AddAuthorization();
+ 
+ // App services
+ builder.Services.AddScoped<ITokenService, TokenService>();
+ builder.Services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+ builder.Services.AddScoped<IEmailSender, EmailSenderFactory>();
++builder.Services.AddScoped<ISmsSender, TextLkSmsSender>();
+ builder.Services.AddScoped<AuthService>();
+ builder.Services.AddScoped<TripService>();
+ builder.Services.AddScoped<BookingService>();
+ builder.Services.AddScoped<RatingService>();
+ builder.Services.AddScoped<NotificationService>();
+ builder.Services.AddScoped<BlockService>();
+ builder.Services.AddScoped<ReportService>();
+ builder.Services.AddScoped<AdminService>();
+ builder.Services.AddHostedService<BookingHousekeepingService>();
+ 
+ var app = builder.Build();
+ 
+ app.UseSerilogRequestLogging();
+ app.UseMiddleware<ErrorHandlingMiddleware>();
+ app.UseMiddleware<CorrelationIdMiddleware>();
+ 
+ app.UseSwagger();
+ app.UseSwaggerUI();
+ 
+ app.UseCors("Default");
+ 
+ app.UseRateLimiter();
+ app.UseAuthentication();
+ app.UseAuthorization();
+ 

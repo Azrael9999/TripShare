@@ -1,0 +1,55 @@
+diff a/src/tripshare-web/src/stores/auth.ts b/src/tripshare-web/src/stores/auth.ts	(rejected hunks)
+@@ -64,41 +64,53 @@ export const useAuthStore = defineStore('auth', {
+       }
+     },
+ 
+     persist() {
+       localStorage.setItem(
+         LS_KEY,
+         JSON.stringify({ accessToken: this.accessToken, refreshToken: this.refreshToken, me: this.me })
+       )
+     },
+ 
+     logout() {
+       this.accessToken = ''
+       this.refreshToken = ''
+       this.me = null
+       localStorage.removeItem(LS_KEY)
+     },
+ 
+     async googleLogin(idToken: string) {
+       const resp = await http.post<AuthResponse>('/auth/google', { idToken })
+       this.accessToken = resp.data.accessToken
+       this.refreshToken = resp.data.refreshToken
+       this.me = resp.data.me
+       this.persist()
+     },
+ 
++    async requestSmsOtp(phoneNumber: string) {
++      await http.post('/auth/sms/request', { phoneNumber })
++    },
++
++    async verifySmsOtp(phoneNumber: string, otp: string) {
++      const resp = await http.post<AuthResponse>('/auth/sms/verify', { phoneNumber, otp })
++      this.accessToken = resp.data.accessToken
++      this.refreshToken = resp.data.refreshToken
++      this.me = resp.data.me
++      this.persist()
++    },
++
+     async refresh() {
+       if (!this.refreshToken) throw new Error('No refresh token')
+       const resp = await http.post<AuthResponse>('/auth/refresh', { refreshToken: this.refreshToken })
+       this.accessToken = resp.data.accessToken
+       this.refreshToken = resp.data.refreshToken
+       this.me = resp.data.me
+       this.persist()
+     },
+ 
+     async loadMe() {
+       const resp = await http.get<Me>('/users/me')
+       this.me = resp.data
+       this.persist()
+     }
+   }
+ })

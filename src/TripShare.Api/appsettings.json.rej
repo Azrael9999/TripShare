@@ -1,0 +1,61 @@
+diff a/src/TripShare.Api/appsettings.json b/src/TripShare.Api/appsettings.json	(rejected hunks)
+@@ -8,48 +8,57 @@
+     "SigningKey": "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_AT_LEAST_64_CHARS________________________________",
+     "AccessTokenMinutes": 30,
+     "RefreshTokenDays": 30
+   },
+   "Auth": {
+     "Google": {
+       "ClientId": "PASTE_YOUR_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
+     }
+   },
+   "Email": {
+     "Mode": "DevFile",
+     "FromName": "TripShare",
+     "FromEmail": "no-reply@tripshare.lk",
+     "Smtp": {
+       "Host": "",
+       "Port": 587,
+       "UseSsl": true,
+       "Username": "",
+       "Password": ""
+     },
+     "Verification": {
+       "TokenHours": 24,
+       "WebBaseUrl": "http://localhost:5173"
+     }
+   },
++  "Sms": {
++    "Provider": "TextLk",
++    "OtpMinutes": 10,
++    "TextLk": {
++      "ApiKey": "PASTE_YOUR_TEXT_LK_API_KEY",
++      "SenderId": "TripShare",
++      "Endpoint": "https://app.text.lk/api/v3/sms/send"
++    }
++  },
+   "RateLimiting": {
+     "Enabled": true
+   },
+   "Serilog": {
+     "MinimumLevel": {
+       "Default": "Information",
+       "Override": {
+         "Microsoft": "Warning",
+         "Microsoft.Hosting.Lifetime": "Information"
+       }
+     }
+   },
+   "AllowedHosts": "*",
+   "Cors": {
+     "AllowedOrigins": [
+       "http://localhost:5173",
+       "https://your-domain.com"
+     ]
+   },
+   "ApplicationInsights": {
+     "ConnectionString": ""
+   }
+-}
+\ No newline at end of file
++}

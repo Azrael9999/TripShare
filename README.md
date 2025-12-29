@@ -3,7 +3,7 @@
 A production-oriented starter for a ride sharing / carpool app.
 
 ## Stack
-- Backend: ASP.NET Core (net8.0), EF Core, SQL Server
+- Backend: ASP.NET Core (net10.0), EF Core, SQL Server
 - Auth: Google ID token login + JWT access + refresh token rotation
 - Email verification gate: **create trip** and **book trip** require verified email
 - Frontend: Vue 3 + TypeScript + Vite + Tailwind + Pinia + Heroicons

@@ -54,7 +54,7 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
-      <AdSlot />
+      <AdSlot name="admin-sidebar" />
       <div class="card p-5">
         <div class="font-semibold">Moderation</div>
         <p class="text-sm text-slate-600 mt-2">

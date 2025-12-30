@@ -53,16 +53,22 @@ export type RoutePoint = {
 
 export type TripListItem = {
   id: string
+  driverId?: string
+  driverName: string
+  driverPhotoUrl?: string
+  driverVerified?: boolean
+  driverIdentityVerified?: boolean
+  driverEmailVerified?: boolean
   departureTimeUtc: string
   seatsTotal: number
-  instantBook: boolean
-  bookingCutoffMinutes: number
-  pendingExpiryMinutes: number
-   status?: string
-   statusUpdatedAtUtc?: string
-  driver: { id: string; displayName: string; photoUrl?: string; ratingAverage?: number; verified?: boolean }
+  currency?: string
+  instantBook?: boolean
+  bookingCutoffMinutes?: number
+  pendingBookingExpiryMinutes?: number
+  status?: string
+  statusUpdatedAtUtc?: string
   routePoints: RoutePoint[]
-  segmentPrices: { fromRoutePointId: string; toRoutePointId: string; priceAmount: number; currency: string }[]
+  segments?: { id: string; orderIndex: number; fromRoutePointId: string; toRoutePointId: string; price: number; currency: string }[]
 }
 
 export type Booking = {

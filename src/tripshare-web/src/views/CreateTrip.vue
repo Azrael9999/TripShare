@@ -122,7 +122,7 @@
           Keep stops simple. Too many stops can confuse riders and reduce booking conversions.
         </p>
       </div>
-      <AdSlot />
+      <AdSlot name="create-trip-sidebar" />
     </aside>
   </div>
 </template>

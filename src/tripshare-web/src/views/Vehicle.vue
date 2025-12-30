@@ -44,7 +44,7 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
-      <AdSlot />
+      <AdSlot name="vehicle-sidebar" />
       <div class="card p-5">
         <div class="font-semibold">Why we ask this</div>
         <p class="text-sm text-slate-600 mt-2">

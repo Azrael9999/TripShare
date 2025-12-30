@@ -42,7 +42,7 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
-      <AdSlot />
+      <AdSlot name="notifications-sidebar" />
       <div class="card p-5">
         <div class="font-semibold">Tip</div>
         <p class="text-sm text-slate-600 mt-2">Enable browser notifications after deployment to increase booking conversions (optional).</p>

@@ -20,6 +20,11 @@
             <div>
               <div class="text-sm text-slate-500">Driver</div>
               <div class="font-semibold">{{ trip.driverName }}</div>
+              <div class="flex flex-wrap gap-2 mt-1">
+                <span v-if="trip.driverVerified" class="chip bg-emerald-50 text-emerald-700 border-emerald-100">Driver verified</span>
+                <span v-else-if="trip.driverIdentityVerified" class="chip bg-emerald-50 text-emerald-700 border-emerald-100">ID verified</span>
+                <span v-else-if="trip.driverEmailVerified" class="chip">Email verified</span>
+              </div>
             </div>
           </div>
         </div>
@@ -88,7 +93,7 @@
       </div>
 
       <!-- Non-invasive ad slot: bottom of details -->
-      <AdSlot />
+      <AdSlot name="trip-details-bottom" />
     </section>
 
     <aside class="lg:col-span-4 space-y-4">

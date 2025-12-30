@@ -145,7 +145,11 @@ public sealed class TripService
 
         // Extra filters
         if (req.VerifiedDriversOnly)
-            q = q.Where(x => x.Driver != null && x.Driver.EmailVerified && !x.Driver.IsSuspended);
+            q = q.Where(x =>
+                x.Driver != null &&
+                !x.Driver.IsSuspended &&
+                x.Driver.EmailVerified &&
+                (x.Driver.DriverVerified || x.Driver.IdentityVerified));
 
         if (req.MaxPricePerSeat is not null)
         {
@@ -210,8 +214,14 @@ public sealed class TripService
             t.DriverId,
             t.Driver?.DisplayName ?? "Driver",
             t.Driver?.PhotoUrl,
+            t.Driver?.DriverVerified ?? false,
+            t.Driver?.IdentityVerified ?? false,
+            t.Driver?.EmailVerified ?? false,
             t.DepartureTimeUtc,
             t.SeatsTotal,
+            t.InstantBook,
+            t.BookingCutoffMinutes,
+            t.PendingBookingExpiryMinutes,
             t.Currency,
             t.Status,
             t.StatusUpdatedAt,

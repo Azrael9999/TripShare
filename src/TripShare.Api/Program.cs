@@ -194,7 +194,8 @@ builder.Services.AddScoped<SafetyService>();
 builder.Services.AddScoped<MessagingService>();
 builder.Services.AddScoped<IdentityVerificationService>();
 builder.Services.AddHostedService<BookingHousekeepingService>();
-builder.Services.AddSingleton<IBackgroundJobQueue, BackgroundJobQueue>();
+builder.Services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
+builder.Services.AddScoped<BackgroundJobProcessor>();
 builder.Services.AddHostedService<BackgroundJobHostedService>();
 builder.Services.AddSingleton<TripLocationStreamService>();
 

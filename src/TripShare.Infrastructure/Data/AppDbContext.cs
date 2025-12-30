@@ -34,6 +34,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<TripShareLink> TripShareLinks => Set<TripShareLink>();
     public DbSet<SafetyIncident> SafetyIncidents => Set<SafetyIncident>();
     public DbSet<IdentityVerificationRequest> IdentityVerificationRequests => Set<IdentityVerificationRequest>();
+    public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -125,7 +126,7 @@ public sealed class AppDbContext : DbContext
         {
             b.HasIndex(x => x.Key).IsUnique();
             b.Property(x => x.Key).HasMaxLength(120);
-            b.Property(x => x.Value).HasMaxLength(400);
+            b.Property(x => x.Value).HasMaxLength(4000);
         });
 
 
@@ -184,6 +185,13 @@ public sealed class AppDbContext : DbContext
             b.Property(x => x.ReviewerNote).HasMaxLength(600);
             b.Property(x => x.KycProvider).HasMaxLength(120);
             b.Property(x => x.KycReference).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<BackgroundJob>(b =>
+        {
+            b.HasIndex(x => new { x.Status, x.RunAfter, x.Attempts });
+            b.Property(x => x.Name).HasMaxLength(200);
+            b.Property(x => x.Payload).HasMaxLength(4000);
         });
     }
 }

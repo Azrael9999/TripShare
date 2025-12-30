@@ -58,13 +58,34 @@ public sealed class AdminController : ControllerBase
     public async Task<IActionResult> Settings(CancellationToken ct)
     {
         var driverVerificationRequired = await _settings.GetDriverVerificationRequiredAsync(ct);
-        return Ok(new { driverVerificationRequired });
+        var ads = await _settings.GetAdConfigurationAsync(ct);
+        return Ok(new
+        {
+            driverVerificationRequired,
+            ads = new
+            {
+                ads.Enabled,
+                ads.FrequencyCapPerSession,
+                slots = ads.Slots
+            }
+        });
     }
 
     [HttpPost("settings/driver-verification")]
     public async Task<IActionResult> SetDriverVerification([FromBody] bool required, CancellationToken ct)
     {
         await _settings.SetDriverVerificationRequiredAsync(required, ct);
+        return NoContent();
+    }
+
+    [HttpGet("ads/config")]
+    public async Task<IActionResult> GetAdConfiguration(CancellationToken ct)
+        => Ok(await _settings.GetAdConfigurationAsync(ct));
+
+    [HttpPost("ads/config")]
+    public async Task<IActionResult> SetAdConfiguration([FromBody] AdConfigurationDto config, CancellationToken ct)
+    {
+        await _settings.SetAdConfigurationAsync(config, ct);
         return NoContent();
     }
 

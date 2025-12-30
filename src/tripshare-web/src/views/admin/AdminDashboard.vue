@@ -23,6 +23,19 @@
         </div>
       </div>
 
+      <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div class="font-semibold">Identity verification</div>
+          <p class="text-sm text-slate-600 mt-1">Review driver documents to unlock verified badges.</p>
+          <RouterLink to="/admin/identity" class="btn-outline mt-3 inline-flex items-center">Review submissions</RouterLink>
+        </div>
+        <div>
+          <div class="font-semibold">Ad configuration</div>
+          <p class="text-sm text-slate-600 mt-1">Manage slots and client-side frequency caps.</p>
+          <RouterLink to="/admin/ads" class="btn-outline mt-3 inline-flex items-center">Configure ads</RouterLink>
+        </div>
+      </div>
+
       <div class="card p-5">
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -44,7 +57,7 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
-      <AdSlot />
+      <AdSlot name="admin-sidebar" />
       <div class="card p-5">
         <div class="font-semibold">Note</div>
         <p class="text-sm text-slate-600 mt-2">Admin endpoints are protected by role and audited in logs.</p>

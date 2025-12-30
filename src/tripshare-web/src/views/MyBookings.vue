@@ -47,7 +47,7 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-4">
-      <AdSlot />
+      <AdSlot name="bookings-sidebar" />
       <div class="card p-6">
         <div class="text-lg font-semibold">Tip</div>
         <p class="text-sm text-slate-600 mt-1">Keep bookings fair: cancel early if your plans change.</p>

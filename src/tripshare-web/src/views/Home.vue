@@ -55,13 +55,15 @@
                 <span class="badge">{{ dayjs(t.departureTimeUtc).format('MMM D, YYYY HH:mm') }} UTC</span>
                 <span class="text-sm text-slate-500">{{ t.seatsTotal }} seats</span>
                 <span v-if="t.instantBook" class="chip">Instant book</span>
-                <span v-if="t.driver?.ratingAverage" class="chip">⭐ {{ t.driver.ratingAverage.toFixed(1) }}</span>
+                <span v-if="t.driverVerified || t.driverIdentityVerified" class="chip bg-emerald-50 text-emerald-700 border-emerald-100">
+                  Verified driver
+                </span>
               </div>
               <div class="mt-3 font-semibold text-lg truncate">
                 {{ startAddr(t) }} → {{ endAddr(t) }}
               </div>
               <div class="mt-2 text-sm text-slate-600 truncate">
-                Driver: {{ t.driver?.displayName ?? 'Driver' }}
+                Driver: {{ t.driverName || 'Driver' }}
               </div>
             </div>
             <div class="text-right">
@@ -85,7 +87,7 @@
         </div>
       </div>
 
-      <AdSlot />
+      <AdSlot name="home-sidebar" />
     </aside>
   </div>
 </template>
@@ -116,10 +118,11 @@ function endAddr(t: TripListItem) {
   return rp.length ? rp[rp.length - 1].displayAddress : 'End'
 }
 function minSegmentPrice(t: TripListItem) {
-  const prices = (t.segmentPrices ?? []).map(x => x.priceAmount)
-  if (!prices.length) return `0 ${t.currency ?? ''}`
+  const prices = (t.segments ?? []).map(x => x.price)
+  if (!prices.length) return `0 ${t.currency ?? ''}`.trim()
   const min = Math.min(...prices)
-  return `${min.toFixed(0)} ${t.segmentPrices[0]?.currency ?? ''}`.trim()
+  const currency = t.currency ?? t.segments?.[0]?.currency ?? ''
+  return `${min.toFixed(0)} ${currency}`.trim()
 }
 
 async function search() {

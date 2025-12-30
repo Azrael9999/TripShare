@@ -3,12 +3,17 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using DbUp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Enrichers.CorrelationId;
+using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using TripShare.Api.Middleware;
+using TripShare.Api.HealthChecks;
 using TripShare.Api.Services;
 using TripShare.Application.Abstractions;
 using TripShare.Infrastructure.Data;
@@ -18,12 +23,23 @@ var builder = WebApplication.CreateBuilder(args);
 // Serilog
 builder.Host.UseSerilog((ctx, lc) =>
 {
+    var aiConnectionString = ctx.Configuration["ApplicationInsights:ConnectionString"];
+    var aiRoleName = ctx.Configuration["ApplicationInsights:RoleName"] ?? "TripShare.Api";
+
     lc
         .Enrich.FromLogContext()
         .Enrich.WithCorrelationId()
+        .Enrich.WithProperty("service", aiRoleName)
         .WriteTo.Console()
         .WriteTo.File("Logs/tripshare-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
         .ReadFrom.Configuration(ctx.Configuration);
+
+    if (!string.IsNullOrWhiteSpace(aiConnectionString))
+    {
+        lc.WriteTo.ApplicationInsights(
+            telemetryConfiguration: new TelemetryConfiguration { ConnectionString = aiConnectionString },
+            telemetryConverter: new TraceTelemetryConverter());
+    }
 });
 
 builder.Services.AddHttpContextAccessor();
@@ -58,7 +74,27 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddHealthChecks();
+// Telemetry
+builder.Services.AddApplicationInsightsTelemetry(opt =>
+{
+    var connectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+    if (!string.IsNullOrWhiteSpace(connectionString))
+    {
+        opt.ConnectionString = connectionString;
+    }
+});
+
+builder.Services.AddHealthChecks()
+    .AddCheck<SqlConnectionHealthCheck>(
+        "db",
+        failureStatus: HealthStatus.Unhealthy);
+
+builder.Services.AddSingleton<SqlConnectionHealthCheck>(sp =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Missing ConnectionStrings:DefaultConnection");
+    return new SqlConnectionHealthCheck(connectionString, sp.GetRequiredService<ILogger<SqlConnectionHealthCheck>>());
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -85,6 +121,17 @@ builder.Services.AddRateLimiter(opt =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    opt.AddPolicy("telemetry", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "telemetry-unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
@@ -149,7 +196,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false // liveness: just confirm the process is up
+});
+app.MapHealthChecks("/health/ready"); // readiness: include registered checks
+app.MapHealthChecks("/health"); // backward compatibility
 
 await EnsureDatabaseReadyAsync(app);
 app.Run();

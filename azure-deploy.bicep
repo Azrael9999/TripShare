@@ -8,6 +8,31 @@ param redisName string
 param communicationName string
 param apiName string = 'tripshare-api'
 param sku string = 'B1'
+@secure()
+param jwtSigningKey string
+param corsAllowedOrigins array = []
+param emailMode string = 'Acs'
+param emailFromName string = 'HopTrip'
+param emailFromEmail string = ''
+@secure()
+param emailAcsConnectionString string = ''
+param emailAcsFromEmail string = ''
+param emailSmtpHost string = ''
+param emailSmtpPort int = 587
+param emailSmtpUseSsl bool = true
+param emailSmtpUsername string = ''
+@secure()
+param emailSmtpPassword string = ''
+param smsProvider string = 'Acs'
+@secure()
+param smsTextLkApiKey string = ''
+param smsTextLkSenderId string = ''
+param smsTextLkEndpoint string = 'https://app.text.lk/api/v3/sms/send'
+@secure()
+param smsAcsConnectionString string = ''
+param smsAcsSender string = ''
+param telemetryApiKey string = ''
+param backgroundJobsProvider string = 'StorageQueue'
 
 var sqlServerName = '${apiName}-sql'
 var dbName = 'TripShareDb'
@@ -106,12 +131,34 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'WEBSITES_PORT', value: '8080' }
         { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
         { name: 'ConnectionStrings__DefaultConnection', value: 'Server=tcp:${sqlServer.name}.database.windows.net,1433;Database=${dbName};User ID=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
-        { name: 'BackgroundJobs__Provider', value: 'StorageQueue' }
+        { name: 'BackgroundJobs__Provider', value: backgroundJobsProvider }
         { name: 'BackgroundJobs__StorageQueue__ConnectionString', value: storage.listKeys().keys[0].value }
         { name: 'BackgroundJobs__StorageQueue__QueueName', value: queueName }
         { name: 'BackgroundJobs__StorageQueue__PoisonQueueName', value: poisonQueue }
         { name: 'Cache__RedisConnection', value: redis.properties.hostName != '' ? '${redis.properties.hostName}:6380,password=${redis.listKeys().primaryKey},ssl=True,abortConnect=False' : '' }
         { name: 'ApplicationInsights__ConnectionString', value: appInsights.properties.ConnectionString }
+        { name: 'Jwt__SigningKey', value: jwtSigningKey }
+        { name: 'Email__Mode', value: emailMode }
+        { name: 'Email__FromName', value: emailFromName }
+        { name: 'Email__FromEmail', value: emailFromEmail }
+        { name: 'Email__Acs__ConnectionString', value: emailAcsConnectionString }
+        { name: 'Email__Acs__FromEmail', value: emailAcsFromEmail }
+        { name: 'Email__SmtpHost', value: emailSmtpHost }
+        { name: 'Email__SmtpPort', value: string(emailSmtpPort) }
+        { name: 'Email__SmtpUseSsl', value: string(emailSmtpUseSsl) }
+        { name: 'Email__SmtpUser', value: emailSmtpUsername }
+        { name: 'Email__SmtpPass', value: emailSmtpPassword }
+        { name: 'Sms__Provider', value: smsProvider }
+        { name: 'Sms__TextLk__ApiKey', value: smsTextLkApiKey }
+        { name: 'Sms__TextLk__SenderId', value: smsTextLkSenderId }
+        { name: 'Sms__TextLk__Endpoint', value: smsTextLkEndpoint }
+        { name: 'Sms__Acs__ConnectionString', value: smsAcsConnectionString }
+        { name: 'Sms__Acs__Sender', value: smsAcsSender }
+        { name: 'Telemetry__ApiKey', value: telemetryApiKey }
+        for origin in corsAllowedOrigins: {
+          name: 'Cors__AllowedOrigins__${indexOf(corsAllowedOrigins, origin)}'
+          value: origin
+        }
       ]
     }
   }

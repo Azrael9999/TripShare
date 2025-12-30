@@ -94,7 +94,7 @@ builder.Services.AddRateLimiter(opt =>
 // EF Core
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
 // Auth

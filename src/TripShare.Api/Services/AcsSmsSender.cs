@@ -31,7 +31,7 @@ public sealed class AcsSmsSender : ISmsSender
             throw new InvalidOperationException("Sms:Acs:Sender missing");
         }
 
-        var response = await _client.SendAsync(sender, phoneNumber, message, ct);
+        var response = await _client.SendAsync(sender, phoneNumber, message, options: default, cancellationToken: ct);
         if (!response.Value.Successful)
         {
             _log.LogError("ACS SMS send failed. Status: {Status} Error: {Message}", response.Value.HttpStatusCode, response.Value.ErrorMessage);

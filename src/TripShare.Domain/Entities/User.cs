@@ -16,6 +16,9 @@ public sealed class User
     public string ProviderUserId { get; set; } = ""; // google 'sub'
 
     public bool IsDriver { get; set; }
+    public bool DriverVerified { get; set; }
+    public DateTimeOffset? DriverVerifiedAt { get; set; }
+    public string? DriverVerificationNote { get; set; }
     public bool IsSuspended { get; set; }
     public string Role { get; set; } = "user"; // user/admin
 

@@ -279,7 +279,7 @@ public sealed class AuthService
         _log.LogInformation("Verification email queued for {Email}", user.Email);
     }
 
-    private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.Role);
+    private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.DriverVerified, u.Role);
 
     private static string NormalizePhone(string phone)
     {

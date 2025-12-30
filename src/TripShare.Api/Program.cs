@@ -130,6 +130,7 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<BlockService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddHostedService<BookingHousekeepingService>();
 
 var app = builder.Build();

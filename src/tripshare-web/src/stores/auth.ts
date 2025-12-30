@@ -8,6 +8,7 @@ export type Me = {
   displayName: string
   photoUrl?: string
   isDriver: boolean
+  driverVerified: boolean
   role: Role
   ratingAverage?: number
   verified?: boolean
@@ -37,7 +38,11 @@ export const useAuthStore = defineStore('auth', {
     normalizeMe(raw: any): Me {
       const rawRole = (raw?.role ?? '').toString().toLowerCase()
       const role: Role = rawRole === 'admin' ? 'admin' : 'user'
-      return { ...raw, role }
+      return {
+        ...raw,
+        role,
+        driverVerified: !!raw?.driverVerified
+      }
     },
 
     async init() {

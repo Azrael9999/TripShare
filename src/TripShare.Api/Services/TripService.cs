@@ -11,20 +11,30 @@ public sealed class TripService
     private readonly AppDbContext _db;
     private readonly ILogger<TripService> _log;
     private readonly NotificationService _notif;
+    private readonly SiteSettingsService _settings;
 
     private const double DefaultAverageSpeedKmh = 45d;
     private static readonly TimeSpan MinLocationUpdateInterval = TimeSpan.FromSeconds(3);
 
-    public TripService(AppDbContext db, ILogger<TripService> log, NotificationService notif)
+    public TripService(AppDbContext db, ILogger<TripService> log, NotificationService notif, SiteSettingsService settings)
     {
         _db = db;
         _log = log;
         _notif = notif;
+        _settings = settings;
     }
 
     public async Task<TripSummaryDto> CreateAsync(Guid driverId, CreateTripRequest req, CancellationToken ct)
     {
         ValidateTripRequest(req);
+
+        // Enforce driver verification if enabled
+        if (await _settings.GetDriverVerificationRequiredAsync(ct))
+        {
+            var driver = await _db.Users.AsNoTracking().SingleAsync(x => x.Id == driverId, ct);
+            if (!driver.DriverVerified)
+                throw new InvalidOperationException("Driver verification is required before creating trips.");
+        }
 
         var trip = new Trip
         {

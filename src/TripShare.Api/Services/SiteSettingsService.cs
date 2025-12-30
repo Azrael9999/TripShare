@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TripShare.Infrastructure.Data;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TripShare.Application.Contracts;
 
 namespace TripShare.Api.Services;
@@ -65,7 +66,7 @@ public sealed class SiteSettingsService
         try
         {
             var parsed = JsonSerializer.Deserialize<AdConfigurationDto>(raw);
-            return parsed ?? DefaultAdConfiguration();
+            return parsed is null ? DefaultAdConfiguration() : Normalize(parsed);
         }
         catch (Exception ex)
         {
@@ -106,6 +107,12 @@ public sealed class SiteSettingsService
         if (config.FrequencyCapPerSession < 0 || config.FrequencyCapPerSession > 100)
             throw new InvalidOperationException("Frequency cap must be between 0-100 per session.");
 
+        if (config.MaxSlotsPerPage < 0 || config.MaxSlotsPerPage > 10)
+            throw new InvalidOperationException("Max slots per page must be between 0-10.");
+
+        if (config.Slots is null)
+            throw new InvalidOperationException("Ad slots collection is required (can be empty list).");
+
         foreach (var slot in config.Slots)
         {
             if (string.IsNullOrWhiteSpace(slot.Slot))
@@ -113,11 +120,13 @@ public sealed class SiteSettingsService
 
             if (slot.Html.Length > 2000)
                 throw new InvalidOperationException("Ad slot HTML too long (max 2000 chars).");
+
+            EnsureSafeMarkup(slot.Html);
         }
     }
 
     private static AdConfigurationDto DefaultAdConfiguration()
-        => new(false, 3, new List<AdSlotDto>
+        => new(false, 3, 3, new List<AdSlotDto>
         {
             new("home-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true),
             new("trip-details-bottom", "<div class='text-sm text-slate-500'>Ad space</div>", true),
@@ -130,4 +139,27 @@ public sealed class SiteSettingsService
             new("admin-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true),
             new("verify-email-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true)
         });
+
+    private static void EnsureSafeMarkup(string html)
+    {
+        var normalized = html ?? string.Empty;
+        if (Regex.IsMatch(normalized, @"(?is)<\s*script") ||
+            Regex.IsMatch(normalized, @"(?is)<\s*(iframe|object|embed|applet)"))
+            throw new InvalidOperationException("Scriptable or embedded elements are not allowed in ad markup.");
+
+        if (Regex.IsMatch(normalized, @"(?is)javascript:") || Regex.IsMatch(normalized, @"(?is)data:text/html"))
+            throw new InvalidOperationException("Potentially unsafe URLs are not allowed in ad markup.");
+
+        if (Regex.IsMatch(normalized, @"(?is)on[a-z]+\s*="))
+            throw new InvalidOperationException("Inline event handlers are not allowed in ad markup.");
+    }
+
+    private static AdConfigurationDto Normalize(AdConfigurationDto config)
+    {
+        var defaults = DefaultAdConfiguration();
+        var maxSlots = config.MaxSlotsPerPage <= 0 ? defaults.MaxSlotsPerPage : config.MaxSlotsPerPage;
+        var freq = config.FrequencyCapPerSession < 0 ? defaults.FrequencyCapPerSession : config.FrequencyCapPerSession;
+        var slots = config.Slots ?? new List<AdSlotDto>();
+        return config with { MaxSlotsPerPage = maxSlots, FrequencyCapPerSession = freq, Slots = slots };
+    }
 }

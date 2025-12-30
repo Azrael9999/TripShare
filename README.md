@@ -121,14 +121,11 @@ az deployment group create -g tripshare-rg -f azure-deploy.bicep \
 - Frontend login modal now supports SMS alongside Google.
 - Driver verification (admin-controlled): enable/disable globally from the Admin dashboard; when enabled, only admin-verified drivers can create trips.
 
-## Ads (non-invasive)
-The UI includes **placeholder ad slots** in:
-- Home sidebar
-- Trip details bottom
-- Profile sidebar
-- Bookings sidebar
-
-Replace `AdSlot.vue` with your ad provider integration (AdSense, etc.). Keep it subtle (no popups).
+## Ads (non-invasive, configurable)
+Ads are controlled centrally via the admin UI and enforced on both server and client:
+- Server: `/api/ads/config` for settings, `/api/ads/impression` for server-side frequency enforcement. Settings include per-session frequency caps, per-page density caps (`MaxSlotsPerPage`), and sanitized HTML (scripts/iframes/event handlers are rejected).
+- Client: page-level caps, session caps, deterministic slot variant selection, telemetry impressions, and a user “reduce ads” toggle surfaced via the ad-block notice.
+- Admin UI: edit slots, enable/disable ads, set per-session cap, and set max slots per page. Default config keeps ads disabled unless turned on.
 
 ## Google Maps / Places efficiency
 - Frontend search uses a debounced + cached Places autocomplete (per-query TTL ~5 minutes) and Place Details cache (per-place TTL ~10 minutes) to reduce calls without hurting UX.

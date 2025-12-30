@@ -43,6 +43,7 @@ builder.Host.UseSerilog((ctx, lc) =>
 });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 
 builder.Services.AddControllers().AddJsonOptions(opt =>
 {
@@ -179,6 +180,9 @@ builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<SiteSettingsService>();
 builder.Services.AddHostedService<BookingHousekeepingService>();
+builder.Services.AddSingleton<IBackgroundJobQueue, BackgroundJobQueue>();
+builder.Services.AddHostedService<BackgroundJobHostedService>();
+builder.Services.AddSingleton<TripLocationStreamService>();
 
 var app = builder.Build();
 

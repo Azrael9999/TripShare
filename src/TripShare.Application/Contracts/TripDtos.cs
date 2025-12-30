@@ -88,4 +88,11 @@ public sealed record EtaResultDto(Guid BookingId, int EtaToPickupSeconds, int Et
 
 public sealed record TripEtaResponse(Guid TripId, IReadOnlyList<EtaResultDto> Etas);
 
+public sealed record TripLocationUpdateDto(
+    Guid TripId,
+    double Lat,
+    double Lng,
+    double? Heading,
+    DateTimeOffset UpdatedAtUtc);
+
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long Total);

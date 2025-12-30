@@ -395,7 +395,7 @@ public sealed class BookingService
                     "Your booking was accepted automatically.",
                     trip.Id,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
 
             await _jobs.EnqueueNotificationAsync(
                 new NotificationWork(
@@ -405,7 +405,7 @@ public sealed class BookingService
                     "A new booking was accepted automatically.",
                     trip.Id,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else
         {
@@ -417,7 +417,7 @@ public sealed class BookingService
                     "A passenger requested to join your trip.",
                     trip.Id,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
 
             await _jobs.EnqueueNotificationAsync(
                 new NotificationWork(
@@ -427,7 +427,7 @@ public sealed class BookingService
                     "Your booking request was sent to the driver.",
                     trip.Id,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
     }
 
@@ -445,7 +445,7 @@ public sealed class BookingService
                     "Your booking request was accepted by the driver.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (newStatus == BookingStatus.Rejected)
         {
@@ -457,7 +457,7 @@ public sealed class BookingService
                     "Your booking request was rejected by the driver.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (newStatus == BookingStatus.Cancelled)
         {
@@ -469,7 +469,7 @@ public sealed class BookingService
                     "Booking was cancelled.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
 
             await _jobs.EnqueueNotificationAsync(
                 new NotificationWork(
@@ -479,7 +479,7 @@ public sealed class BookingService
                     "A booking was cancelled.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (newStatus == BookingStatus.Completed)
         {
@@ -491,7 +491,7 @@ public sealed class BookingService
                     "Trip completed. You can leave a rating now.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
 
             await _jobs.EnqueueNotificationAsync(
                 new NotificationWork(
@@ -501,7 +501,7 @@ public sealed class BookingService
                     "A booking was completed. You can receive ratings now.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
     }
 
@@ -519,7 +519,7 @@ public sealed class BookingService
                     "Your driver is on the way.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (target == BookingProgressStatus.DriverArrived)
         {
@@ -531,7 +531,7 @@ public sealed class BookingService
                     "Your driver is at the pickup.",
                     trip.Id,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (target == BookingProgressStatus.Riding)
         {
@@ -543,7 +543,7 @@ public sealed class BookingService
                     "Enjoy your ride!",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
         else if (target == BookingProgressStatus.Completed)
         {
@@ -555,7 +555,7 @@ public sealed class BookingService
                     "Trip completed. You can rate your driver.",
                     booking.TripId,
                     booking.Id),
-                cancellationToken: ct);
+                ct);
         }
     }
 

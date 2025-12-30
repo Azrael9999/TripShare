@@ -19,21 +19,21 @@ import { useAuthStore } from '../stores/auth'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: Home, meta: { title: 'TripShare Sri Lanka | Carpool & Ride Sharing' } },
-    { path: '/trips/:id', component: TripDetails, meta: { title: 'Trip details | TripShare Sri Lanka' } },
-    { path: '/create', component: CreateTrip, meta: { requiresAuth: true, requiresVerified: true, title: 'Create trip | TripShare' } },
-    { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true, title: 'My trips | TripShare' } },
-    { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true, title: 'My bookings | TripShare' } },
-    { path: '/notifications', component: Notifications, meta: { requiresAuth: true, title: 'Alerts | TripShare' } },
-    { path: '/messages', component: Messages, meta: { requiresAuth: true, title: 'Messages | TripShare' } },
-    { path: '/profile', component: Profile, meta: { requiresAuth: true, title: 'Profile | TripShare' } },
-    { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true, title: 'Vehicle profile | TripShare' } },
-    { path: '/safety', component: Safety, meta: { requiresAuth: true, title: 'Safety | TripShare' } },
-    { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true, title: 'Verify email | TripShare' } },
-    { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin | TripShare' } },
-    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin reports | TripShare' } },
-    { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin identity | TripShare' } },
-    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | TripShare' } }
+    { path: '/', component: Home, meta: { title: 'HopTrip Sri Lanka | Carpool & Ride Sharing' } },
+    { path: '/trips/:id', component: TripDetails, meta: { title: 'Trip details | HopTrip Sri Lanka' } },
+    { path: '/create', component: CreateTrip, meta: { requiresAuth: true, requiresVerified: true, title: 'Create trip | HopTrip' } },
+    { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true, title: 'My trips | HopTrip' } },
+    { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true, title: 'My bookings | HopTrip' } },
+    { path: '/notifications', component: Notifications, meta: { requiresAuth: true, title: 'Alerts | HopTrip' } },
+    { path: '/messages', component: Messages, meta: { requiresAuth: true, title: 'Messages | HopTrip' } },
+    { path: '/profile', component: Profile, meta: { requiresAuth: true, title: 'Profile | HopTrip' } },
+    { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true, title: 'Vehicle profile | HopTrip' } },
+    { path: '/safety', component: Safety, meta: { requiresAuth: true, title: 'Safety | HopTrip' } },
+    { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true, title: 'Verify email | HopTrip' } },
+    { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin | HopTrip' } },
+    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin reports | HopTrip' } },
+    { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin identity | HopTrip' } },
+    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | HopTrip' } }
   ]
 })
 

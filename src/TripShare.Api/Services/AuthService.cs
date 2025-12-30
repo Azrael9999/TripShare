@@ -326,7 +326,7 @@ public sealed class AuthService
         if (user is null)
         {
             var digits = new string(phone.Where(char.IsDigit).ToArray());
-            var aliasEmail = $"sms{digits}@tripshare-sms.local";
+            var aliasEmail = $"sms{digits}@hoptrip-sms.local";
             var display = $"User {TrimForDisplay(phone)}";
             user = new User
             {
@@ -365,7 +365,7 @@ public sealed class AuthService
 
         await _db.SaveChangesAsync(ct);
 
-        var msg = $"Your TripShare code is {otp}. It expires in {expiryMinutes} minutes.";
+        var msg = $"Your HopTrip code is {otp}. It expires in {expiryMinutes} minutes.";
         await _sms.SendAsync(phone, msg, ct);
         _log.LogInformation("SMS OTP sent to {Phone}", phone);
     }
@@ -442,7 +442,7 @@ public sealed class AuthService
 <p><a href=""{link}"">Verify Email</a></p>
 <p>If you did not request this, you can ignore this email.</p>";
 
-        await _email.SendAsync(user.Email, "Verify your TripShare email", body, ct);
+        await _email.SendAsync(user.Email, "Verify your HopTrip email", body, ct);
         _log.LogInformation("Verification email queued for {Email}", user.Email);
     }
 

@@ -5,7 +5,7 @@
       <div class="flex-1 space-y-2">
         <div class="font-semibold text-amber-900">Please consider allowing ads</div>
         <p class="text-sm text-amber-900/90">
-          Ads keep TripShare running. If you trust us, please disable your ad blocker for this site.
+          Ads keep HopTrip running. If you trust us, please disable your ad blocker for this site.
           We keep ads light and never use popups.
         </p>
         <div class="flex flex-wrap gap-2">

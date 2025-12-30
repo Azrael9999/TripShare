@@ -122,7 +122,7 @@
 
         <div v-else class="mt-4 space-y-3">
           <div class="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm px-3 py-2">
-            Community-powered reminder: TripShare only connects riders and drivers. Payment and ride agreements are handled directly between users.
+            Community-powered reminder: HopTrip only connects riders and drivers. Payment and ride agreements are handled directly between users.
           </div>
           <div>
             <label class="text-sm text-slate-600">Pickup</label>
@@ -451,8 +451,8 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   applySeo({
-    title: 'Trip details | TripShare Sri Lanka',
-    description: 'View live ETAs, verified driver details, and segment pricing for this TripShare ride.',
+    title: 'Trip details | HopTrip Sri Lanka',
+    description: 'View live ETAs, verified driver details, and segment pricing for this HopTrip ride.',
     url: window.location.href,
     image: brandConfig.mapOverlayUrl,
     type: 'article'
@@ -472,8 +472,8 @@ watch(trip, (t) => {
   if (!t) return
   const start = t.routePoints?.[0]?.displayAddress
   const end = t.routePoints?.[t.routePoints.length - 1]?.displayAddress
-  const title = start && end ? `${start} to ${end} ride | TripShare Sri Lanka` : 'Trip details | TripShare Sri Lanka'
-  const description = `Book seats on a verified TripShare driver from ${start ?? 'pickup'} to ${end ?? 'drop-off'} with live ETAs and safety sharing.`
+  const title = start && end ? `${start} to ${end} ride | HopTrip Sri Lanka` : 'Trip details | HopTrip Sri Lanka'
+  const description = `Book seats on a verified HopTrip driver from ${start ?? 'pickup'} to ${end ?? 'drop-off'} with live ETAs and safety sharing.`
   applySeo({
     title,
     description,
@@ -489,7 +489,7 @@ watch(trip, (t) => {
     description,
     provider: {
       '@type': 'Organization',
-      name: 'TripShare Sri Lanka',
+      name: 'HopTrip Sri Lanka',
       url: window.location.origin
     },
     offers: {

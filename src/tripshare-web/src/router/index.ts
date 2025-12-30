@@ -15,6 +15,7 @@ import AdminReports from '../views/admin/AdminReports.vue'
 import AdminIdentity from '../views/admin/AdminIdentity.vue'
 import AdminAds from '../views/admin/AdminAds.vue'
 import { useAuthStore } from '../stores/auth'
+import { useAdsStore } from '../stores/ads'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -52,6 +53,12 @@ router.beforeEach(async (to) => {
   if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin') {
     return { path: '/' }
   }
+})
+
+router.afterEach((to) => {
+  const ads = useAdsStore()
+  const pageKey = (to.name?.toString() || to.path) ?? 'global'
+  ads.resetPageImpressions(pageKey)
 })
 
 export default router

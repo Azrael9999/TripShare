@@ -66,6 +66,7 @@ public sealed class AdminController : ControllerBase
             {
                 ads.Enabled,
                 ads.FrequencyCapPerSession,
+                ads.MaxSlotsPerPage,
                 slots = ads.Slots
             }
         });

@@ -20,6 +20,11 @@
             <label class="text-xs text-slate-600">Frequency cap (per session)</label>
             <input v-model.number="frequency" type="number" min="0" max="100" class="input mt-1" />
           </div>
+          <div>
+            <label class="text-xs text-slate-600">Max slots rendered per page</label>
+            <input v-model.number="maxSlotsPerPage" type="number" min="0" max="10" class="input mt-1" />
+            <p class="text-xs text-slate-500 mt-1">0 means unlimited, otherwise caps how many ad blocks can appear on a single page.</p>
+          </div>
         </div>
 
         <div class="mt-4 space-y-3">
@@ -79,6 +84,7 @@ type Slot = { slot: string; html: string; enabled: boolean }
 const slots = reactive<Slot[]>([])
 const enabled = ref(false)
 const frequency = ref(3)
+const maxSlotsPerPage = ref(3)
 const msg = ref('')
 const err = ref('')
 const saving = ref(false)
@@ -95,6 +101,7 @@ async function load() {
     const resp = await http.get('/admin/ads/config')
     enabled.value = !!resp.data?.enabled
     frequency.value = resp.data?.frequencyCapPerSession ?? 3
+    maxSlotsPerPage.value = resp.data?.maxSlotsPerPage ?? 3
     normalizeSlots(resp.data?.slots ?? [])
   } catch (e: any) {
     err.value = e?.response?.data?.message ?? 'Failed to load.'
@@ -109,6 +116,7 @@ async function save() {
     await http.post('/admin/ads/config', {
       enabled: enabled.value,
       frequencyCapPerSession: frequency.value,
+      maxSlotsPerPage: maxSlotsPerPage.value,
       slots: slots.map((s) => ({ ...s }))
     })
     msg.value = 'Saved.'

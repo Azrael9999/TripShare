@@ -112,6 +112,7 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="badge">{{ b.status }}</span>
+                  <span class="chip">{{ b.progressStatus || 'AwaitingPickup' }}</span>
                   <span class="text-xs text-slate-500">{{ dayjs(b.createdAtUtc).fromNow() }}</span>
                 </div>
                 <div class="mt-2 text-sm text-slate-700">
@@ -127,6 +128,13 @@
                 <div class="flex gap-2">
                   <button class="btn-outline" @click="setBookingStatus(b.id, 'Accepted')" :disabled="busy || b.status!=='Pending'">Accept</button>
                   <button class="btn-outline" @click="setBookingStatus(b.id, 'Rejected')" :disabled="busy || b.status!=='Pending'">Reject</button>
+                </div>
+                <div class="flex flex-wrap gap-2 justify-end text-xs">
+                  <button class="btn-ghost" :disabled="progressBusy[b.id]" @click="setProgress(b.id, 'DriverEnRoute')">En route</button>
+                  <button class="btn-ghost" :disabled="progressBusy[b.id]" @click="setProgress(b.id, 'DriverArrived')">Arrived</button>
+                  <button class="btn-ghost" :disabled="progressBusy[b.id]" @click="setProgress(b.id, 'Riding')">Riding</button>
+                  <button class="btn-ghost" :disabled="progressBusy[b.id]" @click="setProgress(b.id, 'Completed')">Complete</button>
+                  <button class="btn-ghost text-red-700" :disabled="progressBusy[b.id]" @click="setProgress(b.id, 'Cancelled')">Cancel</button>
                 </div>
                 <button class="btn-ghost" @click="openContact(b.id)" :disabled="busy || b.status!=='Accepted'">View contact</button>
               </div>
@@ -170,6 +178,7 @@ const err = ref('')
 const bookingsLoading = ref(false)
 const bookings = ref<any[]>([])
 const contact = ref<Record<string, string>>({})
+const progressBusy = ref<Record<string, boolean>>({})
 const locationLat = ref<number | null>(null)
 const locationLng = ref<number | null>(null)
 const locationHeading = ref<number | null>(null)
@@ -187,6 +196,7 @@ function mapBooking(b:any){
     id: b.id ?? b.Id,
     tripId: b.tripId ?? b.TripId,
     status: b.status ?? b.Status,
+    progressStatus: b.progressStatus ?? b.ProgressStatus,
     seats: b.seats ?? b.Seats,
     totalPrice: b.priceTotal ?? b.PriceTotal,
     currency: b.currency ?? b.Currency,
@@ -300,6 +310,18 @@ async function openContact(id:string){
     const resp = await http.get(`/bookings/${id}/contact`)
     contact.value[id] = JSON.stringify(resp.data, null, 2)
   }finally{ busy.value=false }
+}
+
+async function setProgress(id:string, progress:string){
+  progressBusy.value = { ...progressBusy.value, [id]: true }
+  try{
+    await http.post(`/bookings/${id}/progress`, { progress, note: null })
+    await loadBookings()
+  }catch(e:any){
+    err.value = e?.response?.data?.message ?? 'Failed to update progress.'
+  }finally{
+    progressBusy.value = { ...progressBusy.value, [id]: false }
+  }
 }
 
 loadTrips()

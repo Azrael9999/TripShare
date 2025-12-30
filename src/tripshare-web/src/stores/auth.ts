@@ -7,6 +7,7 @@ export type Me = {
   emailVerified: boolean
   displayName: string
   photoUrl?: string
+  phoneNumber?: string
   isDriver: boolean
   driverVerified: boolean
   identityVerified: boolean
@@ -43,6 +44,7 @@ export const useAuthStore = defineStore('auth', {
       return {
         ...raw,
         role,
+        phoneNumber: raw?.phoneNumber ?? raw?.phone ?? null,
         driverVerified: !!raw?.driverVerified,
         identityVerified: !!raw?.identityVerified,
         phoneVerified: !!raw?.phoneVerified

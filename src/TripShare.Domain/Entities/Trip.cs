@@ -3,9 +3,11 @@ namespace TripShare.Domain.Entities;
 public enum TripStatus
 {
     Scheduled = 0,
-    InProgress = 1,
-    Completed = 2,
-    Cancelled = 3
+    EnRoute = 1,
+    Arrived = 2,
+    InProgress = 3,
+    Completed = 4,
+    Cancelled = 5
 }
 
 
@@ -26,6 +28,11 @@ public sealed class Trip
     public string? Notes { get; set; }
 
     public TripStatus Status { get; set; } = TripStatus.Scheduled;
+    public DateTimeOffset StatusUpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? StartedAtUtc { get; set; }
+    public DateTimeOffset? ArrivedAtUtc { get; set; }
+    public DateTimeOffset? CompletedAtUtc { get; set; }
+    public DateTimeOffset? CancelledAtUtc { get; set; }
 
     /// <summary>
     /// If true, bookings are automatically accepted (subject to seat availability).
@@ -47,6 +54,11 @@ public sealed class Trip
     public List<TripRoutePoint> RoutePoints { get; set; } = new();
     public List<TripSegment> Segments { get; set; } = new();
     public List<Booking> Bookings { get; set; } = new();
+
+    public double? CurrentLat { get; set; }
+    public double? CurrentLng { get; set; }
+    public double? CurrentHeading { get; set; }
+    public DateTimeOffset? LocationUpdatedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

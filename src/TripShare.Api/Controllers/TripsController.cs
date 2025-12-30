@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TripShare.Api.Filters;
 using TripShare.Api.Helpers;
 using TripShare.Api.Services;
@@ -24,7 +25,8 @@ public sealed class TripsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<TripSummaryDto>> Get(Guid id, CancellationToken ct)
     {
-        var trip = await _trips.GetByIdAsync(id, ct);
+        Guid? requester = User.Identity?.IsAuthenticated == true ? User.GetUserId() : null;
+        var trip = await _trips.GetByIdAsync(id, requester, ct);
         return trip is null ? NotFound() : Ok(trip);
     }
 
@@ -84,5 +86,35 @@ public sealed class TripsController : ControllerBase
     {
         await _trips.SetVisibilityAsync(User.GetUserId(), id, req.IsPublic, ct);
         return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/status")]
+    public async Task<IActionResult> UpdateStatus(
+        Guid id,
+        [FromBody] UpdateTripStatusRequest req,
+        CancellationToken ct)
+    {
+        await _trips.SetStatusAsync(User.GetUserId(), id, req, ct);
+        return NoContent();
+    }
+
+    [Authorize]
+    [EnableRateLimiting("location-updates")]
+    [HttpPost("{id:guid}/location")]
+    public async Task<IActionResult> UpdateLocation(
+        Guid id,
+        [FromBody] UpdateTripLocationRequest req,
+        CancellationToken ct)
+    {
+        await _trips.UpdateLocationAsync(User.GetUserId(), id, req, ct);
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpGet("{id:guid}/eta")]
+    public async Task<ActionResult<TripEtaResponse>> Eta(Guid id, CancellationToken ct)
+    {
+        return Ok(await _trips.CalculateEtasAsync(User.GetUserId(), id, ct));
     }
 }

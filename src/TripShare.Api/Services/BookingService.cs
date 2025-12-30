@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TripShare.Api.Helpers;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
 using TripShare.Infrastructure.Data;
@@ -10,6 +11,7 @@ public sealed class BookingService
     private readonly AppDbContext _db;
     private readonly ILogger<BookingService> _log;
     private readonly NotificationService _notif;
+    private const double MaxPinDistanceKm = 5d;
 
     public BookingService(AppDbContext db, ILogger<BookingService> log, NotificationService notif)
     {
@@ -20,8 +22,13 @@ public sealed class BookingService
 
     public async Task<BookingDto> CreateAsync(Guid passengerId, CreateBookingRequest req, CancellationToken ct)
     {
+        var now = DateTimeOffset.UtcNow;
         if (req.Seats < 1 || req.Seats > 8)
             throw new InvalidOperationException("Seats must be 1..8.");
+
+        if (!GeoHelper.IsValidCoordinate(req.PickupLat, req.PickupLng) ||
+            !GeoHelper.IsValidCoordinate(req.DropoffLat, req.DropoffLng))
+            throw new InvalidOperationException("Invalid pickup/dropoff coordinates.");
 
         // Load trip graph
         var trip = await _db.Trips
@@ -36,6 +43,9 @@ public sealed class BookingService
         var drop = trip.RoutePoints.SingleOrDefault(x => x.Id == req.DropoffRoutePointId);
         if (pickup is null || drop is null) throw new InvalidOperationException("Invalid pickup/dropoff.");
         if (drop.OrderIndex <= pickup.OrderIndex) throw new InvalidOperationException("Dropoff must be after pickup.");
+
+        ValidatePinNearRoute(pickup, req.PickupLat, req.PickupLng, "Pickup pin too far from route.");
+        ValidatePinNearRoute(drop, req.DropoffLat, req.DropoffLng, "Dropoff pin too far from route.");
 
         var startSegIndex = pickup.OrderIndex;
         var endSegIndex = drop.OrderIndex - 1;
@@ -77,13 +87,26 @@ public sealed class BookingService
                     PassengerId = passengerId,
                     PickupRoutePointId = pickup.Id,
                     DropoffRoutePointId = drop.Id,
+                    PickupLat = req.PickupLat,
+                    PickupLng = req.PickupLng,
+                    DropoffLat = req.DropoffLat,
+                    DropoffLng = req.DropoffLng,
+                    PickupPlaceName = req.PickupPlaceName,
+                    PickupPlaceId = req.PickupPlaceId,
+                    DropoffPlaceName = req.DropoffPlaceName,
+                    DropoffPlaceId = req.DropoffPlaceId,
                     Seats = req.Seats,
                     PriceTotal = total,
                     Currency = trip.Currency,
                     Status = trip.InstantBook ? BookingStatus.Accepted : BookingStatus.Pending,
                     PendingExpiresAt = trip.InstantBook
                         ? null
-                        : DateTimeOffset.UtcNow.AddMinutes(Math.Max(1, trip.PendingBookingExpiryMinutes))
+                        : now.AddMinutes(Math.Max(1, trip.PendingBookingExpiryMinutes)),
+                    ProgressStatus = BookingProgressStatus.AwaitingPickup,
+                    ProgressUpdatedAt = now,
+                    StatusUpdatedAt = now,
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 _db.Bookings.Add(booking);
@@ -230,12 +253,29 @@ public sealed class BookingService
         booking.CancellationReason = req.Reason;
         booking.Status = newStatus;
         booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.StatusUpdatedAt = booking.UpdatedAt;
 
         if (newStatus is BookingStatus.Accepted or BookingStatus.Rejected)
             booking.PendingExpiresAt = null;
 
+        if (newStatus == BookingStatus.Accepted)
+        {
+            booking.ProgressStatus = BookingProgressStatus.AwaitingPickup;
+            booking.ProgressUpdatedAt = booking.UpdatedAt;
+        }
+
         if (newStatus == BookingStatus.Completed)
+        {
             booking.CompletedAt ??= DateTimeOffset.UtcNow;
+            booking.ProgressStatus = BookingProgressStatus.Completed;
+            booking.ProgressUpdatedAt = booking.CompletedAt.Value;
+        }
+
+        if (newStatus is BookingStatus.Cancelled or BookingStatus.Rejected)
+        {
+            booking.ProgressStatus = BookingProgressStatus.Cancelled;
+            booking.ProgressUpdatedAt = booking.UpdatedAt;
+        }
 
         // If reject/cancel: release seats within a serializable transaction
         if (newStatus is BookingStatus.Rejected or BookingStatus.Cancelled)
@@ -372,6 +412,60 @@ public sealed class BookingService
         };
     }
 
+    public async Task UpdateProgressAsync(Guid actorId, Guid bookingId, UpdateBookingProgressRequest req, CancellationToken ct)
+    {
+        var booking = await _db.Bookings
+            .Include(x => x.Trip)
+            .FirstOrDefaultAsync(x => x.Id == bookingId, ct);
+
+        if (booking?.Trip is null) throw new InvalidOperationException("Booking not found.");
+        if (booking.Trip.DriverId != actorId)
+            throw new UnauthorizedAccessException("Only the driver can update live status.");
+        if (booking.Status != BookingStatus.Accepted)
+            throw new InvalidOperationException("Only accepted bookings can be updated.");
+
+        var target = ParseProgress(req.Progress);
+        if (target == BookingProgressStatus.Cancelled)
+        {
+            await SetStatusAsync(actorId, bookingId, new SetBookingStatusRequest("cancelled", req.Note), isDriverAction: true, ct);
+            return;
+        }
+
+        if (!IsProgressTransitionAllowed(booking.ProgressStatus, target))
+            throw new InvalidOperationException("Invalid progress transition.");
+
+        var now = DateTimeOffset.UtcNow;
+        booking.ProgressStatus = target;
+        booking.ProgressUpdatedAt = now;
+        booking.UpdatedAt = now;
+
+        if (target == BookingProgressStatus.Completed)
+        {
+            booking.Status = BookingStatus.Completed;
+            booking.StatusUpdatedAt = now;
+            booking.CompletedAt ??= now;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        if (target == BookingProgressStatus.DriverEnRoute)
+        {
+            await _notif.CreateAsync(booking.PassengerId, NotificationType.TripUpdated, "Driver en route", "Your driver is on the way.", booking.TripId, booking.Id, ct);
+        }
+        else if (target == BookingProgressStatus.DriverArrived)
+        {
+            await _notif.CreateAsync(booking.PassengerId, NotificationType.TripUpdated, "Driver arrived", "Your driver is at the pickup.", booking.TripId, booking.Id, ct);
+        }
+        else if (target == BookingProgressStatus.Riding)
+        {
+            await _notif.CreateAsync(booking.PassengerId, NotificationType.TripStarted, "Trip started", "Enjoy your ride!", booking.TripId, booking.Id, ct);
+        }
+        else if (target == BookingProgressStatus.Completed)
+        {
+            await _notif.CreateAsync(booking.PassengerId, NotificationType.TripCompleted, "Trip completed", "Trip completed. You can rate your driver.", booking.TripId, booking.Id, ct);
+        }
+    }
+
     private static BookingDto Map(Booking b)
         => new(
             b.Id,
@@ -379,9 +473,49 @@ public sealed class BookingService
             b.PassengerId,
             b.PickupRoutePointId,
             b.DropoffRoutePointId,
+            b.PickupLat,
+            b.PickupLng,
+            b.DropoffLat,
+            b.DropoffLng,
+            b.PickupPlaceName,
+            b.PickupPlaceId,
+            b.DropoffPlaceName,
+            b.DropoffPlaceId,
             b.Seats,
             b.PriceTotal,
             b.Currency,
             b.Status.ToString(),
-            b.CreatedAt);
+            b.ProgressStatus.ToString(),
+            b.CreatedAt,
+            b.StatusUpdatedAt,
+            b.ProgressUpdatedAt,
+            b.CompletedAt);
+
+    private static void ValidatePinNearRoute(TripRoutePoint rp, double lat, double lng, string message)
+    {
+        var km = GeoHelper.DistanceInKm(lat, lng, rp.Lat, rp.Lng);
+        if (km > MaxPinDistanceKm) throw new InvalidOperationException(message);
+    }
+
+    private static BookingProgressStatus ParseProgress(string status)
+        => status.Trim().ToLowerInvariant() switch
+        {
+            "awaitingpickup" or "awaiting_pickup" => BookingProgressStatus.AwaitingPickup,
+            "driverenroute" or "driver_enroute" => BookingProgressStatus.DriverEnRoute,
+            "driverarrived" or "driver_arrived" => BookingProgressStatus.DriverArrived,
+            "riding" => BookingProgressStatus.Riding,
+            "completed" => BookingProgressStatus.Completed,
+            "cancelled" => BookingProgressStatus.Cancelled,
+            _ => throw new InvalidOperationException("Invalid progress status.")
+        };
+
+    private static bool IsProgressTransitionAllowed(BookingProgressStatus current, BookingProgressStatus target)
+        => current switch
+        {
+            BookingProgressStatus.AwaitingPickup => target is BookingProgressStatus.DriverEnRoute or BookingProgressStatus.DriverArrived or BookingProgressStatus.Cancelled,
+            BookingProgressStatus.DriverEnRoute => target is BookingProgressStatus.DriverArrived or BookingProgressStatus.Riding or BookingProgressStatus.Cancelled,
+            BookingProgressStatus.DriverArrived => target is BookingProgressStatus.Riding or BookingProgressStatus.Completed or BookingProgressStatus.Cancelled,
+            BookingProgressStatus.Riding => target is BookingProgressStatus.Completed or BookingProgressStatus.Cancelled,
+            _ => false
+        };
 }

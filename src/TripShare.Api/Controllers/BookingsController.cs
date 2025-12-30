@@ -53,4 +53,12 @@ public sealed class BookingsController : ControllerBase
         await _bookings.SetStatusAsync(User.GetUserId(), id, req, isDriverAction: true, ct);
         return NoContent();
     }
+
+    [Authorize]
+    [HttpPost("{id:guid}/progress")]
+    public async Task<IActionResult> UpdateProgress(Guid id, [FromBody] UpdateBookingProgressRequest req, CancellationToken ct)
+    {
+        await _bookings.UpdateProgressAsync(User.GetUserId(), id, req, ct);
+        return NoContent();
+    }
 }

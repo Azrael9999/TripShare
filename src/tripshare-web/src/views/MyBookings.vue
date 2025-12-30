@@ -21,7 +21,11 @@
               <div>
                 <div class="font-semibold">Booking</div>
                 <div class="text-sm text-slate-600 mt-1">Status: <span class="badge">{{ b.status }}</span></div>
+                <div class="text-xs text-slate-500 mt-1">Progress: {{ b.progressStatus ?? '—' }}</div>
                 <div class="text-sm text-slate-500 mt-1">{{ b.priceTotal }} {{ b.currency }} · Seats: {{ b.seats }}</div>
+                <div v-if="etaForBooking(b.id)" class="text-xs text-emerald-700 mt-1">
+                  ETA pickup {{ formatEta(etaForBooking(b.id).etaToPickupSeconds) }} · Drop {{ formatEta(etaForBooking(b.id).etaToDropoffSeconds) }}
+                </div>
               </div>
 
               <div class="flex gap-2">
@@ -83,13 +87,16 @@ import { XMarkIcon } from '@heroicons/vue/24/outline'
 const tab = ref<'passenger'|'driver'>('passenger')
 const loading = ref(false)
 const items = ref<any[]>([])
+const etaMap = ref<Record<string, any>>({})
 
 async function load() {
   loading.value = true
   try {
     const url = tab.value === 'passenger' ? '/bookings/mine' : '/bookings/driver'
     const resp = await http.get(url)
+    etaMap.value = {}
     items.value = resp.data
+    await loadEtasForBookings()
   } finally {
     loading.value = false
   }
@@ -104,6 +111,23 @@ async function setStatus(id: string, status: string, driverAction = false) {
   const endpoint = driverAction ? `/bookings/${id}/status/driver` : `/bookings/${id}/status/passenger`
   await http.post(endpoint, { status })
   await load()
+}
+
+async function loadEtasForBookings() {
+  const ids = Array.from(new Set(items.value.filter((b:any) => b.status === 'Accepted').map((b:any) => b.tripId)))
+  for (const tripId of ids) {
+    try {
+      const resp = await http.get(`/trips/${tripId}/eta`)
+      const etas = resp.data?.etas ?? []
+      etas.forEach((e:any) => { etaMap.value[e.bookingId] = e })
+    } catch {
+      // ignore unauthorized trips
+    }
+  }
+}
+
+function etaForBooking(id:string) {
+  return etaMap.value[id]
 }
 
 // Rating modal
@@ -129,5 +153,11 @@ async function submitRating() {
   } catch (e: any) {
     err.value = e?.response?.data?.message ?? 'Rating failed'
   }
+}
+
+function formatEta(sec?: number) {
+  if (sec === undefined || sec === null) return 'N/A'
+  const minutes = Math.max(0, Math.round(sec / 60))
+  return minutes < 1 ? '<1 min' : `${minutes} min`
 }
 </script>

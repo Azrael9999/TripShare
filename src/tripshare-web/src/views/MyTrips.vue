@@ -54,9 +54,40 @@
         <div class="mt-4 flex flex-wrap gap-2">
           <button class="btn-outline" @click="setVisibility(true)" :disabled="busy">Make public</button>
           <button class="btn-outline" @click="setVisibility(false)" :disabled="busy">Hide</button>
-          <button class="btn-outline" @click="startTrip" :disabled="busy">Start</button>
-          <button class="btn-outline" @click="completeTrip" :disabled="busy">Complete</button>
+          <button class="btn-outline" @click="setTripStatus('enroute')" :disabled="busy">En route</button>
+          <button class="btn-outline" @click="setTripStatus('arrived')" :disabled="busy">Arrived</button>
+          <button class="btn-outline" @click="setTripStatus('inprogress')" :disabled="busy">Start ride</button>
+          <button class="btn-outline" @click="setTripStatus('completed')" :disabled="busy">Complete</button>
           <button class="btn-outline" @click="cancelTrip" :disabled="busy">Cancel</button>
+        </div>
+
+        <div class="mt-3 text-sm text-slate-600">
+          Live status: <span class="badge">{{ selectedTrip.status ?? 'Unknown' }}</span>
+          <div v-if="selectedTrip.locationUpdatedAtUtc" class="text-xs text-slate-500 mt-1">
+            Location {{ dayjs(selectedTrip.locationUpdatedAtUtc).fromNow() }} · {{ formatCoords(selectedTrip) }}
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-2xl border border-slate-100 p-4 bg-slate-50">
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold text-slate-700">Send location ping</div>
+            <button class="btn-ghost text-xs" type="button" @click="syncLocationFromTrip">Use start</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label class="text-xs text-slate-500">Lat</label>
+              <input v-model.number="locationLat" type="number" step="0.0001" class="input mt-1" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">Lng</label>
+              <input v-model.number="locationLng" type="number" step="0.0001" class="input mt-1" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">Heading</label>
+              <input v-model.number="locationHeading" type="number" min="0" max="360" step="1" class="input mt-1" />
+            </div>
+          </div>
+          <button class="btn-outline mt-3" :disabled="busy" @click="sendLocation">Send ping</button>
         </div>
 
         <p v-if="msg" class="text-sm text-emerald-700 mt-3">{{ msg }}</p>
@@ -119,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { http } from '../lib/api'
@@ -139,12 +170,17 @@ const err = ref('')
 const bookingsLoading = ref(false)
 const bookings = ref<any[]>([])
 const contact = ref<Record<string, string>>({})
+const locationLat = ref<number | null>(null)
+const locationLng = ref<number | null>(null)
+const locationHeading = ref<number | null>(null)
 
 function startAddr(t:any){ return t.routePoints?.[0]?.displayAddress ?? 'Start' }
 function endAddr(t:any){ const rp=t.routePoints??[]; return rp.length? rp[rp.length-1].displayAddress:'End' }
 
 const selectedTrip = computed(() => trips.value.find(t => t.id===selectedTripId.value) ?? null)
 const tripBookings = computed(() => bookings.value.filter(b => b.tripId === selectedTripId.value).map(mapBooking))
+
+watch(selectedTrip, () => syncLocationFromTrip())
 
 function mapBooking(b:any){
   return {
@@ -156,6 +192,11 @@ function mapBooking(b:any){
     currency: b.currency ?? b.Currency,
     createdAtUtc: (b.createdAt ?? b.CreatedAt) as string
   }
+}
+
+function formatCoords(t:any){
+  if (t?.currentLat === undefined || t?.currentLng === undefined || t?.currentLat === null || t?.currentLng === null) return 'No live location yet'
+  return `${Number(t.currentLat).toFixed(4)}, ${Number(t.currentLng).toFixed(4)}`
 }
 
 async function loadTrips() {
@@ -171,6 +212,7 @@ async function loadTrips() {
 
 async function selectTrip(id:string){
   selectedTripId.value = id
+  syncLocationFromTrip()
   await loadBookings()
 }
 
@@ -198,40 +240,46 @@ async function setVisibility(isPublic:boolean){
     err.value = e?.response?.data?.message ?? e?.message ?? 'Failed.'
   }finally{ busy.value=false }
 }
-async function startTrip(){
+
+async function setTripStatus(status:string, reason?:string){
   if (!selectedTripId.value) return
   msg.value=''; err.value=''
   busy.value=true
   try{
-    await http.post(`/trips/${selectedTripId.value}/start`)
-    msg.value = 'Trip started.'
+    await http.post(`/trips/${selectedTripId.value}/status`, { status, reason: reason ?? null })
+    msg.value = `Trip marked ${status}.`
     await loadTrips()
   }catch(e:any){ err.value = e?.response?.data?.message ?? e?.message ?? 'Failed.' }
   finally{ busy.value=false }
 }
-async function completeTrip(){
-  if (!selectedTripId.value) return
+
+async function sendLocation(){
+  if (!selectedTripId.value || locationLat.value===null || locationLng.value===null) {
+    err.value = 'Provide lat/lng before sending location.'
+    return
+  }
   msg.value=''; err.value=''
   busy.value=true
   try{
-    await http.post(`/trips/${selectedTripId.value}/complete`)
-    msg.value = 'Trip completed.'
+    await http.post(`/trips/${selectedTripId.value}/location`, { lat: locationLat.value, lng: locationLng.value, heading: locationHeading.value ?? null })
+    msg.value = 'Location updated.'
     await loadTrips()
   }catch(e:any){ err.value = e?.response?.data?.message ?? e?.message ?? 'Failed.' }
   finally{ busy.value=false }
+}
+
+function syncLocationFromTrip(){
+  if (!selectedTrip.value || !selectedTrip.value.routePoints?.length) return
+  const start = selectedTrip.value.routePoints[0]
+  locationLat.value = start.lat
+  locationLng.value = start.lng
+  locationHeading.value = 0
 }
 async function cancelTrip(){
   if (!selectedTripId.value) return
   const reason = prompt('Cancellation reason (shown to passengers):') ?? ''
   if (!reason) return
-  msg.value=''; err.value=''
-  busy.value=true
-  try{
-    await http.post(`/trips/${selectedTripId.value}/cancel`, { reason })
-    msg.value = 'Trip cancelled.'
-    await loadTrips()
-  }catch(e:any){ err.value = e?.response?.data?.message ?? e?.message ?? 'Failed.' }
-  finally{ busy.value=false }
+  await setTripStatus('cancelled', reason)
 }
 
 async function setBookingStatus(id:string, status:'Accepted'|'Rejected'){

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TripShare.Api.Helpers;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
 using TripShare.Infrastructure.Data;
@@ -10,6 +11,9 @@ public sealed class TripService
     private readonly AppDbContext _db;
     private readonly ILogger<TripService> _log;
     private readonly NotificationService _notif;
+
+    private const double DefaultAverageSpeedKmh = 45d;
+    private static readonly TimeSpan MinLocationUpdateInterval = TimeSpan.FromSeconds(3);
 
     public TripService(AppDbContext db, ILogger<TripService> log, NotificationService notif)
     {
@@ -78,16 +82,26 @@ public sealed class TripService
         return await GetByIdAsync(trip.Id, ct) ?? throw new InvalidOperationException("Trip not found after creation.");
     }
 
-    public async Task<TripSummaryDto?> GetByIdAsync(Guid tripId, CancellationToken ct)
+    public Task<TripSummaryDto?> GetByIdAsync(Guid tripId, CancellationToken ct)
+        => GetByIdAsync(tripId, null, ct);
+
+    public async Task<TripSummaryDto?> GetByIdAsync(Guid tripId, Guid? requesterId, CancellationToken ct)
     {
         var trip = await _db.Trips
             .AsNoTracking()
             .Include(x => x.Driver)
             .Include(x => x.RoutePoints)
             .Include(x => x.Segments)
-            .SingleOrDefaultAsync(x => x.Id == tripId && x.IsPublic, ct);
+            .Include(x => x.Bookings)
+            .SingleOrDefaultAsync(x => x.Id == tripId, ct);
 
         if (trip is null || trip.Driver is null) return null;
+
+        if (!trip.IsPublic && requesterId is null)
+            return null;
+
+        if (!trip.IsPublic && requesterId is not null && trip.DriverId != requesterId && !trip.Bookings.Any(b => b.PassengerId == requesterId))
+            throw new UnauthorizedAccessException();
 
         return Map(trip);
     }
@@ -170,8 +184,19 @@ public sealed class TripService
             t.DepartureTimeUtc,
             t.SeatsTotal,
             t.Currency,
+            t.Status,
+            t.StatusUpdatedAt,
+            t.StartedAtUtc,
+            t.ArrivedAtUtc,
+            t.CompletedAtUtc,
+            t.CancelledAtUtc,
+            t.CurrentLat,
+            t.CurrentLng,
+            t.CurrentHeading,
+            t.LocationUpdatedAt,
             t.RoutePoints.OrderBy(x => x.OrderIndex).Select(x => new RoutePointDto(x.Id, x.OrderIndex, x.Type, x.Lat, x.Lng, x.DisplayAddress)).ToList(),
-            t.Segments.OrderBy(x => x.OrderIndex).Select(x => new SegmentDto(x.Id, x.OrderIndex, x.FromRoutePointId, x.ToRoutePointId, x.Price, x.Currency)).ToList()
+            t.Segments.OrderBy(x => x.OrderIndex).Select(x => new SegmentDto(x.Id, x.OrderIndex, x.FromRoutePointId, x.ToRoutePointId, x.Price, x.Currency)).ToList(),
+            t.Notes
         );
 
     private static void ValidateTripRequest(CreateTripRequest req)
@@ -193,67 +218,89 @@ public sealed class TripService
     }
 
 
-    public async Task StartTripAsync(Guid driverId, Guid tripId, CancellationToken ct)
+    public Task StartTripAsync(Guid driverId, Guid tripId, CancellationToken ct)
+        => ApplyStatusAsync(driverId, tripId, TripStatus.InProgress, null, ct);
+
+    public Task CompleteTripAsync(Guid driverId, Guid tripId, CancellationToken ct)
+        => ApplyStatusAsync(driverId, tripId, TripStatus.Completed, null, ct);
+
+    public Task CancelTripAsync(Guid driverId, Guid tripId, string? reason, CancellationToken ct)
+        => ApplyStatusAsync(driverId, tripId, TripStatus.Cancelled, reason, ct);
+
+    public Task SetStatusAsync(Guid driverId, Guid tripId, UpdateTripStatusRequest req, CancellationToken ct)
+        => ApplyStatusAsync(driverId, tripId, ParseStatus(req.Status), req.Reason, ct);
+
+    public async Task UpdateLocationAsync(Guid driverId, Guid tripId, UpdateTripLocationRequest req, CancellationToken ct)
     {
-        var trip = await _db.Trips.Include(x => x.Bookings).FirstOrDefaultAsync(x => x.Id == tripId, ct);
+        if (!GeoHelper.IsValidCoordinate(req.Lat, req.Lng))
+            throw new InvalidOperationException("Invalid coordinates.");
+        if (req.Heading is < 0 or > 360)
+            throw new InvalidOperationException("Heading must be between 0-360 degrees.");
+
+        var trip = await _db.Trips.FirstOrDefaultAsync(x => x.Id == tripId, ct);
         if (trip == null) throw new InvalidOperationException("Trip not found.");
         if (trip.DriverId != driverId) throw new UnauthorizedAccessException();
-        if (trip.Status != TripStatus.Scheduled) throw new InvalidOperationException("Trip cannot be started in current state.");
+        if (trip.Status is TripStatus.Completed or TripStatus.Cancelled)
+            throw new InvalidOperationException("Trip is finished.");
 
-        trip.Status = TripStatus.InProgress;
-        trip.UpdatedAt = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        if (trip.LocationUpdatedAt is not null && now - trip.LocationUpdatedAt < MinLocationUpdateInterval)
+            throw new InvalidOperationException("Too many updates. Please slow down.");
+
+        trip.CurrentLat = req.Lat;
+        trip.CurrentLng = req.Lng;
+        trip.CurrentHeading = req.Heading;
+        trip.LocationUpdatedAt = now;
+        trip.UpdatedAt = now;
+
         await _db.SaveChangesAsync(ct);
-
-        foreach (var b in trip.Bookings.Where(x => x.Status == BookingStatus.Accepted))
-            await _notif.CreateAsync(b.PassengerId, NotificationType.TripStarted, "Trip started", "Your driver has started the trip.", trip.Id, b.Id, ct);
-
-        await _notif.CreateAsync(driverId, NotificationType.TripStarted, "Trip started", "You started the trip.", trip.Id, null, ct);
     }
 
-    public async Task CompleteTripAsync(Guid driverId, Guid tripId, CancellationToken ct)
+    public async Task<TripEtaResponse> CalculateEtasAsync(Guid actorId, Guid tripId, CancellationToken ct)
     {
-        var trip = await _db.Trips.Include(x => x.Bookings).FirstOrDefaultAsync(x => x.Id == tripId, ct);
-        if (trip == null) throw new InvalidOperationException("Trip not found.");
-        if (trip.DriverId != driverId) throw new UnauthorizedAccessException();
-        if (trip.Status is TripStatus.Cancelled or TripStatus.Completed) throw new InvalidOperationException("Trip is already finished.");
+        var trip = await _db.Trips
+            .AsNoTracking()
+            .Include(x => x.RoutePoints)
+            .Include(x => x.Bookings)
+            .SingleOrDefaultAsync(x => x.Id == tripId, ct);
 
-        trip.Status = TripStatus.Completed;
-        trip.UpdatedAt = DateTimeOffset.UtcNow;
+        if (trip is null) throw new InvalidOperationException("Trip not found.");
+
+        var canSee = trip.DriverId == actorId || trip.Bookings.Any(b => b.PassengerId == actorId);
+        if (!canSee) throw new UnauthorizedAccessException();
+
+        var orderedPoints = trip.RoutePoints.OrderBy(x => x.OrderIndex).ToList();
+        if (orderedPoints.Count < 2) throw new InvalidOperationException("Route missing.");
+
+        var originLat = trip.CurrentLat ?? orderedPoints[0].Lat;
+        var originLng = trip.CurrentLng ?? orderedPoints[0].Lng;
+
+        var results = new List<EtaResultDto>();
+        var now = DateTimeOffset.UtcNow;
 
         foreach (var b in trip.Bookings.Where(x => x.Status == BookingStatus.Accepted))
         {
-            b.Status = BookingStatus.Completed;
-            b.CompletedAt = DateTimeOffset.UtcNow;
-            b.UpdatedAt = DateTimeOffset.UtcNow;
-            await _notif.CreateAsync(b.PassengerId, NotificationType.TripCompleted, "Trip completed", "Trip completed. You can leave a rating now.", trip.Id, b.Id, ct);
+            var pickup = orderedPoints.SingleOrDefault(x => x.Id == b.PickupRoutePointId);
+            var drop = orderedPoints.SingleOrDefault(x => x.Id == b.DropoffRoutePointId);
+            if (pickup is null || drop is null || drop.OrderIndex <= pickup.OrderIndex)
+                continue;
+
+            var pickupLat = GeoHelper.IsValidCoordinate(b.PickupLat, b.PickupLng) ? b.PickupLat : pickup.Lat;
+            var pickupLng = GeoHelper.IsValidCoordinate(b.PickupLat, b.PickupLng) ? b.PickupLng : pickup.Lng;
+            var dropLat = GeoHelper.IsValidCoordinate(b.DropoffLat, b.DropoffLng) ? b.DropoffLat : drop.Lat;
+            var dropLng = GeoHelper.IsValidCoordinate(b.DropoffLat, b.DropoffLng) ? b.DropoffLng : drop.Lng;
+
+            var toPickupKm = GeoHelper.DistanceInKm(originLat, originLng, pickupLat, pickupLng);
+            var alongRouteKm = SumRouteDistanceKm(orderedPoints, pickup.OrderIndex, drop.OrderIndex);
+            var toDropKm = GeoHelper.DistanceInKm(pickupLat, pickupLng, dropLat, dropLng);
+
+            var etaPickupSeconds = (int)Math.Round((toPickupKm / DefaultAverageSpeedKmh) * 3600);
+            var etaDropoffSeconds = (int)Math.Round(((toPickupKm + alongRouteKm + toDropKm) / DefaultAverageSpeedKmh) * 3600);
+
+            results.Add(new EtaResultDto(b.Id, etaPickupSeconds, etaDropoffSeconds, now));
         }
 
-        await _db.SaveChangesAsync(ct);
-        await _notif.CreateAsync(driverId, NotificationType.TripCompleted, "Trip completed", "Trip completed. You can receive ratings now.", trip.Id, null, ct);
-    }
-
-    public async Task CancelTripAsync(Guid driverId, Guid tripId, string? reason, CancellationToken ct)
-    {
-        var trip = await _db.Trips.Include(x => x.Bookings).FirstOrDefaultAsync(x => x.Id == tripId, ct);
-        if (trip == null) throw new InvalidOperationException("Trip not found.");
-        if (trip.DriverId != driverId) throw new UnauthorizedAccessException();
-        if (trip.Status == TripStatus.Cancelled) return;
-
-        trip.Status = TripStatus.Cancelled;
-        trip.IsPublic = false;
-        trip.Notes = string.IsNullOrWhiteSpace(reason) ? trip.Notes : $"{trip.Notes}\nCancelled: {reason}";
-        trip.UpdatedAt = DateTimeOffset.UtcNow;
-
-        foreach (var b in trip.Bookings.Where(x => x.Status is BookingStatus.Pending or BookingStatus.Accepted))
-        {
-            b.Status = BookingStatus.Cancelled;
-            b.CancellationReason = "Trip cancelled by driver";
-            b.UpdatedAt = DateTimeOffset.UtcNow;
-            await _notif.CreateAsync(b.PassengerId, NotificationType.TripCancelled, "Trip cancelled", "Trip was cancelled by the driver.", trip.Id, b.Id, ct);
-        }
-
-        await _db.SaveChangesAsync(ct);
-        await _notif.CreateAsync(driverId, NotificationType.TripCancelled, "Trip cancelled", "Trip cancelled.", trip.Id, null, ct);
+        return new TripEtaResponse(trip.Id, results);
     }
 
     public async Task SetVisibilityAsync(Guid driverId, Guid tripId, bool isPublic, CancellationToken ct)
@@ -264,6 +311,131 @@ public sealed class TripService
         trip.IsPublic = isPublic;
         trip.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+    }
+
+    private static TripStatus ParseStatus(string status)
+        => status.Trim().ToLowerInvariant() switch
+        {
+            "scheduled" => TripStatus.Scheduled,
+            "enroute" or "en-route" => TripStatus.EnRoute,
+            "arrived" => TripStatus.Arrived,
+            "inprogress" or "in-progress" => TripStatus.InProgress,
+            "completed" => TripStatus.Completed,
+            "cancelled" => TripStatus.Cancelled,
+            _ => throw new InvalidOperationException("Invalid status.")
+        };
+
+    private static bool IsTransitionAllowed(TripStatus current, TripStatus next)
+        => current switch
+        {
+            TripStatus.Scheduled => next is TripStatus.EnRoute or TripStatus.InProgress or TripStatus.Cancelled,
+            TripStatus.EnRoute => next is TripStatus.Arrived or TripStatus.Cancelled,
+            TripStatus.Arrived => next is TripStatus.InProgress or TripStatus.Cancelled,
+            TripStatus.InProgress => next is TripStatus.Completed or TripStatus.Cancelled,
+            _ => false
+        };
+
+    private async Task ApplyStatusAsync(Guid driverId, Guid tripId, TripStatus target, string? reason, CancellationToken ct)
+    {
+        var trip = await _db.Trips
+            .Include(x => x.Bookings)
+            .FirstOrDefaultAsync(x => x.Id == tripId, ct);
+
+        if (trip == null) throw new InvalidOperationException("Trip not found.");
+        if (trip.DriverId != driverId) throw new UnauthorizedAccessException();
+
+        if (trip.Status == target) return;
+        if (!IsTransitionAllowed(trip.Status, target))
+            throw new InvalidOperationException("Trip cannot transition to the requested status.");
+
+        var now = DateTimeOffset.UtcNow;
+        trip.Status = target;
+        trip.StatusUpdatedAt = now;
+        trip.UpdatedAt = now;
+
+        switch (target)
+        {
+            case TripStatus.EnRoute:
+                trip.StartedAtUtc ??= now;
+                UpdateBookingProgress(trip.Bookings, BookingProgressStatus.DriverEnRoute, now);
+                await NotifyPassengers(trip, NotificationType.TripUpdated, "Driver en route", "Your driver is on the way.", ct);
+                await _notif.CreateAsync(driverId, NotificationType.TripUpdated, "Trip en route", "You marked the trip as en route.", trip.Id, null, ct);
+                break;
+            case TripStatus.Arrived:
+                trip.ArrivedAtUtc ??= now;
+                UpdateBookingProgress(trip.Bookings, BookingProgressStatus.DriverArrived, now);
+                await NotifyPassengers(trip, NotificationType.TripUpdated, "Driver arrived", "Your driver is at the pickup.", ct);
+                await _notif.CreateAsync(driverId, NotificationType.TripUpdated, "Arrived", "You marked arrival at pickup.", trip.Id, null, ct);
+                break;
+            case TripStatus.InProgress:
+                trip.StartedAtUtc ??= now;
+                UpdateBookingProgress(trip.Bookings, BookingProgressStatus.Riding, now);
+                await NotifyPassengers(trip, NotificationType.TripStarted, "Trip started", "Your driver has started the trip.", ct);
+                await _notif.CreateAsync(driverId, NotificationType.TripStarted, "Trip started", "You started the trip.", trip.Id, null, ct);
+                break;
+            case TripStatus.Completed:
+                trip.CompletedAtUtc ??= now;
+                UpdateBookingProgress(trip.Bookings, BookingProgressStatus.Completed, now);
+                foreach (var b in trip.Bookings.Where(x => x.Status == BookingStatus.Accepted))
+                {
+                    b.Status = BookingStatus.Completed;
+                    b.CompletedAt = now;
+                    b.UpdatedAt = now;
+                    b.StatusUpdatedAt = now;
+                    await _notif.CreateAsync(b.PassengerId, NotificationType.TripCompleted, "Trip completed", "Trip completed. You can leave a rating now.", trip.Id, b.Id, ct);
+                }
+                await _notif.CreateAsync(driverId, NotificationType.TripCompleted, "Trip completed", "Trip completed. You can receive ratings now.", trip.Id, null, ct);
+                break;
+            case TripStatus.Cancelled:
+                trip.CancelledAtUtc ??= now;
+                trip.IsPublic = false;
+                trip.Notes = string.IsNullOrWhiteSpace(reason) ? trip.Notes : $"{trip.Notes}\nCancelled: {reason}";
+                UpdateBookingProgress(trip.Bookings, BookingProgressStatus.Cancelled, now);
+                foreach (var b in trip.Bookings.Where(x => x.Status is BookingStatus.Pending or BookingStatus.Accepted))
+                {
+                    b.Status = BookingStatus.Cancelled;
+                    b.CancellationReason = "Trip cancelled by driver";
+                    b.UpdatedAt = now;
+                    b.StatusUpdatedAt = now;
+                    await _notif.CreateAsync(b.PassengerId, NotificationType.TripCancelled, "Trip cancelled", "Trip was cancelled by the driver.", trip.Id, b.Id, ct);
+                }
+                await _notif.CreateAsync(driverId, NotificationType.TripCancelled, "Trip cancelled", "Trip cancelled.", trip.Id, null, ct);
+                break;
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task NotifyPassengers(Trip trip, NotificationType type, string title, string body, CancellationToken ct)
+    {
+        foreach (var b in trip.Bookings.Where(x => x.Status == BookingStatus.Accepted))
+            await _notif.CreateAsync(b.PassengerId, type, title, body, trip.Id, b.Id, ct);
+    }
+
+    private static void UpdateBookingProgress(IEnumerable<Booking> bookings, BookingProgressStatus progress, DateTimeOffset now)
+    {
+        foreach (var b in bookings.Where(x => x.Status == BookingStatus.Accepted))
+        {
+            b.ProgressStatus = progress;
+            b.ProgressUpdatedAt = now;
+            b.UpdatedAt = now;
+        }
+    }
+
+    private static double SumRouteDistanceKm(List<TripRoutePoint> orderedPoints, int startIndex, int endIndex)
+    {
+        startIndex = Math.Clamp(startIndex, 0, orderedPoints.Count - 1);
+        endIndex = Math.Clamp(endIndex, 0, orderedPoints.Count - 1);
+        if (endIndex <= startIndex) return 0;
+
+        double km = 0;
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            var a = orderedPoints[i];
+            var b = orderedPoints[i + 1];
+            km += GeoHelper.DistanceInKm(a.Lat, a.Lng, b.Lat, b.Lng);
+        }
+        return km;
     }
 
 }

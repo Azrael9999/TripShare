@@ -27,6 +27,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<Report> Reports => Set<Report>();
+    public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -110,6 +111,13 @@ public sealed class AppDbContext : DbContext
             b.Property(x => x.Reason).HasMaxLength(120);
             b.Property(x => x.Details).HasMaxLength(2000);
             b.Property(x => x.AdminNote).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<SiteSetting>(b =>
+        {
+            b.HasIndex(x => x.Key).IsUnique();
+            b.Property(x => x.Key).HasMaxLength(120);
+            b.Property(x => x.Value).HasMaxLength(400);
         });
 
 

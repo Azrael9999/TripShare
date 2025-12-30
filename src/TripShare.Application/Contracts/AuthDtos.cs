@@ -19,6 +19,7 @@ public sealed record UserMeDto(
     string DisplayName,
     string? PhotoUrl,
     bool IsDriver,
+    bool DriverVerified,
     string Role
 );
 

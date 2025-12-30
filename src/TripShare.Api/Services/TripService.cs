@@ -3,6 +3,7 @@ using TripShare.Api.Helpers;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
 using TripShare.Infrastructure.Data;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace TripShare.Api.Services;
 
@@ -12,16 +13,26 @@ public sealed class TripService
     private readonly ILogger<TripService> _log;
     private readonly NotificationService _notif;
     private readonly SiteSettingsService _settings;
+    private readonly IMemoryCache _cache;
+    private readonly TripLocationStreamService _locationStream;
 
     private const double DefaultAverageSpeedKmh = 45d;
     private static readonly TimeSpan MinLocationUpdateInterval = TimeSpan.FromSeconds(3);
 
-    public TripService(AppDbContext db, ILogger<TripService> log, NotificationService notif, SiteSettingsService settings)
+    public TripService(
+        AppDbContext db,
+        ILogger<TripService> log,
+        NotificationService notif,
+        SiteSettingsService settings,
+        IMemoryCache cache,
+        TripLocationStreamService locationStream)
     {
         _db = db;
         _log = log;
         _notif = notif;
         _settings = settings;
+        _cache = cache;
+        _locationStream = locationStream;
     }
 
     public async Task<TripSummaryDto> CreateAsync(Guid driverId, CreateTripRequest req, CancellationToken ct)
@@ -118,6 +129,12 @@ public sealed class TripService
 
     public async Task<PagedResult<TripSummaryDto>> SearchAsync(SearchTripsRequest req, CancellationToken ct)
     {
+        var cacheKey = $"search:{req.Query}:{req.FromUtc}:{req.ToUtc}:{req.MaxPricePerSeat}:{req.MinDriverRating}:{req.VerifiedDriversOnly}:{req.Page}:{req.PageSize}";
+        if (_cache.TryGetValue<PagedResult<TripSummaryDto>>(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
         var q = _db.Trips
             .AsNoTracking()
             .Include(x => x.Driver)
@@ -162,7 +179,9 @@ public sealed class TripService
             .Take(size)
             .ToListAsync(ct);
 
-        return new PagedResult<TripSummaryDto>(items.Select(Map).ToList(), page, size, total);
+        var result = new PagedResult<TripSummaryDto>(items.Select(Map).ToList(), page, size, total);
+        _cache.Set(cacheKey, result, TimeSpan.FromSeconds(30));
+        return result;
     }
 
     public async Task<PagedResult<TripSummaryDto>> MyTripsAsync(Guid driverId, int page, int pageSize, CancellationToken ct)
@@ -264,6 +283,7 @@ public sealed class TripService
         trip.UpdatedAt = now;
 
         await _db.SaveChangesAsync(ct);
+        await _locationStream.PublishAsync(trip.Id, new TripLocationUpdateDto(trip.Id, trip.CurrentLat, trip.CurrentLng, trip.CurrentHeading, trip.LocationUpdatedAt!.Value), ct);
     }
 
     public async Task<TripEtaResponse> CalculateEtasAsync(Guid actorId, Guid tripId, CancellationToken ct)
@@ -311,6 +331,35 @@ public sealed class TripService
         }
 
         return new TripEtaResponse(trip.Id, results);
+    }
+
+    public async IAsyncEnumerable<TripLocationUpdateDto> StreamLocationsAsync(Guid actorId, Guid tripId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var trip = await _db.Trips
+            .AsNoTracking()
+            .Include(x => x.Bookings)
+            .SingleOrDefaultAsync(x => x.Id == tripId, ct);
+
+        if (trip is null) throw new InvalidOperationException("Trip not found.");
+
+        var canSee = trip.DriverId == actorId || trip.Bookings.Any(b => b.PassengerId == actorId);
+        if (!canSee) throw new UnauthorizedAccessException();
+
+        var subscription = _locationStream.Subscribe(tripId, ct);
+        if (trip.CurrentLat is not null && trip.CurrentLng is not null && trip.LocationUpdatedAt is not null)
+        {
+            yield return new TripLocationUpdateDto(trip.Id, trip.CurrentLat.Value, trip.CurrentLng.Value, trip.CurrentHeading, trip.LocationUpdatedAt.Value);
+        }
+
+        if (subscription.Latest is not null)
+        {
+            yield return subscription.Latest;
+        }
+
+        await foreach (var update in subscription.Stream.WithCancellation(ct))
+        {
+            yield return update;
+        }
     }
 
     public async Task SetVisibilityAsync(Guid driverId, Guid tripId, bool isPublic, CancellationToken ct)

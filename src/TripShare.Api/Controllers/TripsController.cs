@@ -40,6 +40,7 @@ public sealed class TripsController : ControllerBase
 
     [Authorize]
     [RequireVerifiedEmail]
+    [IdempotencyKey]
     [HttpPost]
     public async Task<ActionResult<TripSummaryDto>> Create(
         [FromBody] CreateTripRequest req,
@@ -116,5 +117,21 @@ public sealed class TripsController : ControllerBase
     public async Task<ActionResult<TripEtaResponse>> Eta(Guid id, CancellationToken ct)
     {
         return Ok(await _trips.CalculateEtasAsync(User.GetUserId(), id, ct));
+    }
+
+    [Authorize]
+    [HttpGet("{id:guid}/location/stream")]
+    public async Task StreamLocation(Guid id, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Add("X-Accel-Buffering", "no");
+        Response.ContentType = "text/event-stream";
+
+        await foreach (var update in _trips.StreamLocationsAsync(User.GetUserId(), id, ct))
+        {
+            await Response.WriteAsync($"event: location\n", ct);
+            await Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(update)}\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+        }
     }
 }

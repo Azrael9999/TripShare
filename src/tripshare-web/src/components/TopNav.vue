@@ -23,6 +23,7 @@
             <span v-if="unreadCount>0" class="ml-1 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-brand-600 text-white text-xs">{{ unreadCount }}</span>
           </span>
         </RouterLink>
+        <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
         <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
@@ -46,6 +47,7 @@
         <RouterLink to="/" class="btn-ghost px-3 py-2">Explore</RouterLink>
         <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/create" class="btn-ghost px-3 py-2">Create</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/notifications" class="btn-ghost px-3 py-2">Alerts</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost px-3 py-2">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost px-3 py-2">Profile</RouterLink>
       </div>
     </div>
@@ -122,6 +124,8 @@ const otpSent = ref(false)
 const smsError = ref('')
 const sendingOtp = ref(false)
 const verifying = ref(false)
+const normalizedPhone = computed(() => smsPhone.value.trim())
+const isValidSriLankaPhone = computed(() => isLkPhone(normalizedPhone.value))
 
 async function refreshUnread() {
   if (!auth.isAuthenticated) { unreadCount.value = 0; return }
@@ -142,9 +146,13 @@ async function onGoogleSuccess(idToken: string) {
 
 async function sendSmsOtp() {
   smsError.value = ''
+  if (!isValidSriLankaPhone.value) {
+    smsError.value = 'Enter a valid Sri Lankan phone (07XXXXXXXX or +94XXXXXXXXX).'
+    return
+  }
   sendingOtp.value = true
   try {
-    await auth.requestSmsOtp(smsPhone.value)
+    await auth.requestSmsOtp(normalizedPhone.value)
     otpSent.value = true
   } catch (err: any) {
     smsError.value = err?.response?.data?.message ?? 'Failed to send code. Try again.'
@@ -155,9 +163,13 @@ async function sendSmsOtp() {
 
 async function verifySms() {
   smsError.value = ''
+  if (!isValidSriLankaPhone.value) {
+    smsError.value = 'Enter a valid Sri Lankan phone (07XXXXXXXX or +94XXXXXXXXX).'
+    return
+  }
   verifying.value = true
   try {
-    await auth.verifySmsOtp(smsPhone.value, smsOtp.value)
+    await auth.verifySmsOtp(normalizedPhone.value, smsOtp.value.trim())
     openLogin.value = false
     await refreshUnread()
   } catch (err: any) {
@@ -169,4 +181,8 @@ async function verifySms() {
 
 onMounted(() => { refreshUnread() })
 watch(() => auth.isAuthenticated, () => { refreshUnread() })
+
+function isLkPhone(value: string) {
+  return /^(?:\+94|0)7\d{8}$/.test(value)
+}
 </script>

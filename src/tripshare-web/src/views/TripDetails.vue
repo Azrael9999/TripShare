@@ -190,6 +190,32 @@
           <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         </div>
       </div>
+
+      <div class="card p-6 space-y-3" v-if="auth.isAuthenticated">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-lg font-semibold">Share this ride</div>
+            <p class="text-sm text-slate-600">Create a link to share with other riders.</p>
+          </div>
+          <button class="btn-ghost text-sm" @click="createShareLink" :disabled="shareSending">
+            <span v-if="shareSending">Creating…</span>
+            <span v-else>Generate</span>
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-600">Expires (minutes)</label>
+            <input v-model.number="shareMinutes" type="number" min="5" max="720" class="input mt-1" />
+          </div>
+        </div>
+        <div v-if="shareLink" class="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-1">
+          <div class="text-xs text-slate-500">Share link</div>
+          <div class="text-sm break-all">{{ shareLink }}</div>
+          <div class="text-xs text-slate-500">Expires at {{ shareExpiresAt }}</div>
+          <button class="btn-outline mt-2" @click="copyShareLink">Copy</button>
+        </div>
+        <p v-if="shareErr" class="text-sm text-red-600">{{ shareErr }}</p>
+      </div>
     </aside>
   </div>
 </template>
@@ -223,6 +249,13 @@ const etaResults = ref<any[]>([])
 const etaError = ref('')
 const etaLoading = ref(false)
 const refreshHandle = ref<number | undefined>()
+
+// Share link
+const shareMinutes = ref(120)
+const shareSending = ref(false)
+const shareErr = ref('')
+const shareLink = ref<string>('')
+const shareExpiresAt = ref<string>('')
 
 async function load(initial = false) {
   if (initial) loading.value = true
@@ -352,7 +385,50 @@ function formatSeconds(sec: number) {
   return minutes < 1 ? '<1 min' : `${minutes} min`
 }
 
+async function createShareLink() {
+  shareErr.value = ''
+  shareLink.value = ''
+  shareExpiresAt.value = ''
+  if (!route.params.id || typeof route.params.id !== 'string') {
+    shareErr.value = 'Trip id missing.'
+    return
+  }
+  if (!shareMinutes.value || shareMinutes.value < 5) {
+    shareErr.value = 'Expiry must be at least 5 minutes.'
+    return
+  }
+  shareSending.value = true
+  try {
+    const resp = await http.post('/safety/share-trip', {
+      tripId: route.params.id,
+      expiresMinutes: shareMinutes.value,
+      emergencyContactId: null
+    })
+    shareLink.value = `${window.location.origin}/api/safety/share-trip/${route.params.id}/${resp.data?.token}`
+    shareExpiresAt.value = resp.data?.expiresAt
+  } catch (e:any) {
+    shareErr.value = e?.response?.data?.message ?? 'Failed to create share link.'
+  } finally {
+    shareSending.value = false
+  }
+}
+
+async function copyShareLink() {
+  if (!shareLink.value) return
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+  } catch {
+    // ignore copy failures
+  }
+}
+
 onBeforeUnmount(() => {
   if (refreshHandle.value) window.clearInterval(refreshHandle.value)
 })
 </script>
+
+<style scoped>
+.share-card {
+  @apply card p-6 space-y-3;
+}
+</style>

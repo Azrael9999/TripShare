@@ -22,7 +22,7 @@
 
           <div>
             <label class="text-sm text-slate-600">Currency</label>
-            <input v-model="currency" class="input mt-1" placeholder="USD" />
+            <input v-model="currency" class="input mt-1" placeholder="LKR" />
           </div>
           <div class="flex items-end gap-3">
             <label class="chip">
@@ -149,7 +149,7 @@ type RP = {
 const router = useRouter()
 const departureUtc = ref(new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16))
 const seats = ref(3)
-const currency = ref('USD')
+const currency = ref('LKR')
 const notes = ref('')
 const instantBook = ref(false)
 const bookingCutoff = ref(30)

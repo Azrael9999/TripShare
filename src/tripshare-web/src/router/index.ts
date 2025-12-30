@@ -9,6 +9,7 @@ import Notifications from '../views/Notifications.vue'
 import Vehicle from '../views/Vehicle.vue'
 import Safety from '../views/Safety.vue'
 import MyTrips from '../views/MyTrips.vue'
+import Messages from '../views/Messages.vue'
 import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import AdminReports from '../views/admin/AdminReports.vue'
 import AdminIdentity from '../views/admin/AdminIdentity.vue'
@@ -24,6 +25,7 @@ const router = createRouter({
     { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true } },
     { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true } },
     { path: '/notifications', component: Notifications, meta: { requiresAuth: true } },
+    { path: '/messages', component: Messages, meta: { requiresAuth: true } },
     { path: '/profile', component: Profile, meta: { requiresAuth: true } },
     { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true } },
     { path: '/safety', component: Safety, meta: { requiresAuth: true } },

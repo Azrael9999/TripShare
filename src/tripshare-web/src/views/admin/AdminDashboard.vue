@@ -54,6 +54,28 @@
         <p v-if="settingsMsg" class="text-sm text-emerald-700 mt-2">{{ settingsMsg }}</p>
         <p v-if="settingsErr" class="text-sm text-red-600 mt-2">{{ settingsErr }}</p>
       </div>
+
+      <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-2">
+          <div class="font-semibold">Suspend / unsuspend user</div>
+          <input v-model="suspendUserId" class="input" placeholder="User GUID" />
+          <div class="flex gap-2">
+            <button class="btn-outline" :disabled="!isGuid(suspendUserId)" @click="suspend(true)">Suspend</button>
+            <button class="btn-ghost" :disabled="!isGuid(suspendUserId)" @click="suspend(false)">Unsuspend</button>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="font-semibold">Hide / unhide trip</div>
+          <input v-model="hideTripId" class="input" placeholder="Trip GUID" />
+          <div class="flex gap-2">
+            <button class="btn-outline" :disabled="!isGuid(hideTripId)" @click="hide(true)">Hide</button>
+            <button class="btn-ghost" :disabled="!isGuid(hideTripId)" @click="hide(false)">Unhide</button>
+          </div>
+        </div>
+      </div>
+
+      <p v-if="adminMsg" class="text-sm text-emerald-700">{{ adminMsg }}</p>
+      <p v-if="adminErr" class="text-sm text-red-600">{{ adminErr }}</p>
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
@@ -75,6 +97,10 @@ const metrics = ref<any|null>(null)
 const driverVerificationRequired = ref(false)
 const settingsMsg = ref('')
 const settingsErr = ref('')
+const adminMsg = ref('')
+const adminErr = ref('')
+const suspendUserId = ref('')
+const hideTripId = ref('')
 
 const cards = computed(() => {
   const m = metrics.value ?? {}
@@ -107,5 +133,41 @@ async function toggleDriverVerification() {
   } catch (e:any) {
     settingsErr.value = e?.response?.data?.message ?? 'Failed to update setting.'
   }
+}
+
+async function suspend(suspendUser:boolean) {
+  adminMsg.value = ''
+  adminErr.value = ''
+  if (!isGuid(suspendUserId.value)) {
+    adminErr.value = 'Enter a valid user ID (GUID).'
+    return
+  }
+  try {
+    await http.post(`/admin/users/${suspendUserId.value}/suspend`, { suspend: suspendUser })
+    adminMsg.value = suspendUser ? 'User suspended.' : 'User unsuspended.'
+    suspendUserId.value = ''
+  } catch (e:any) {
+    adminErr.value = e?.response?.data?.message ?? 'Failed to update user.'
+  }
+}
+
+async function hide(hideTrip:boolean) {
+  adminMsg.value = ''
+  adminErr.value = ''
+  if (!isGuid(hideTripId.value)) {
+    adminErr.value = 'Enter a valid trip ID (GUID).'
+    return
+  }
+  try {
+    await http.post(`/admin/trips/${hideTripId.value}/hide`, { hide: hideTrip })
+    adminMsg.value = hideTrip ? 'Trip hidden.' : 'Trip unhidden.'
+    hideTripId.value = ''
+  } catch (e:any) {
+    adminErr.value = e?.response?.data?.message ?? 'Failed to update trip.'
+  }
+}
+
+function isGuid(value: string) {
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value.trim())
 }
 </script>

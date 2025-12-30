@@ -13,6 +13,7 @@ using Serilog;
 using Serilog.Enrichers.CorrelationId;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using TripShare.Api.Middleware;
+using TripShare.Api.HealthChecks;
 using TripShare.Api.Services;
 using TripShare.Application.Abstractions;
 using TripShare.Infrastructure.Data;
@@ -84,12 +85,16 @@ builder.Services.AddApplicationInsightsTelemetry(opt =>
 });
 
 builder.Services.AddHealthChecks()
-    .AddSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Missing ConnectionStrings:DefaultConnection"),
-        healthQuery: "SELECT 1",
-        name: "db",
+    .AddCheck<SqlConnectionHealthCheck>(
+        "db",
         failureStatus: HealthStatus.Unhealthy);
+
+builder.Services.AddSingleton<SqlConnectionHealthCheck>(sp =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Missing ConnectionStrings:DefaultConnection");
+    return new SqlConnectionHealthCheck(connectionString, sp.GetRequiredService<ILogger<SqlConnectionHealthCheck>>());
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

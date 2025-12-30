@@ -28,6 +28,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
+    public DbSet<EmergencyContact> EmergencyContacts => Set<EmergencyContact>();
+    public DbSet<MessageThread> MessageThreads => Set<MessageThread>();
+    public DbSet<Message> Messages => Set<Message>();
+    public DbSet<TripShareLink> TripShareLinks => Set<TripShareLink>();
+    public DbSet<SafetyIncident> SafetyIncidents => Set<SafetyIncident>();
+    public DbSet<IdentityVerificationRequest> IdentityVerificationRequests => Set<IdentityVerificationRequest>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,6 +45,8 @@ public sealed class AppDbContext : DbContext
             b.HasIndex(x => x.PhoneNumber);
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.DisplayName).HasMaxLength(120);
+            b.Property(x => x.PasswordHash).HasMaxLength(400);
+            b.Property(x => x.PasswordSalt).HasMaxLength(200);
             b.Property(x => x.Role).HasMaxLength(32);
         });
 
@@ -131,6 +139,51 @@ public sealed class AppDbContext : DbContext
             b.HasIndex(x => x.UserId);
             b.HasIndex(x => x.PhoneNumber);
             b.Property(x => x.PhoneNumber).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<EmergencyContact>(b =>
+        {
+            b.HasIndex(x => x.UserId).IsUnique();
+            b.Property(x => x.Name).HasMaxLength(160);
+            b.Property(x => x.PhoneNumber).HasMaxLength(64);
+            b.Property(x => x.Email).HasMaxLength(320);
+        });
+
+        modelBuilder.Entity<MessageThread>(b =>
+        {
+            b.HasIndex(x => new { x.BookingId, x.TripId });
+            b.HasIndex(x => new { x.ParticipantAId, x.ParticipantBId });
+        });
+
+        modelBuilder.Entity<Message>(b =>
+        {
+            b.HasIndex(x => new { x.ThreadId, x.SentAt });
+            b.Property(x => x.Body).HasMaxLength(2000);
+            b.HasOne(x => x.Thread).WithMany(x => x.Messages).HasForeignKey(x => x.ThreadId);
+        });
+
+        modelBuilder.Entity<TripShareLink>(b =>
+        {
+            b.HasIndex(x => x.TripId);
+            b.HasIndex(x => x.Token).IsUnique();
+            b.Property(x => x.Token).HasMaxLength(120);
+        });
+
+        modelBuilder.Entity<SafetyIncident>(b =>
+        {
+            b.HasIndex(x => new { x.Status, x.CreatedAt });
+            b.Property(x => x.Summary).HasMaxLength(800);
+        });
+
+        modelBuilder.Entity<IdentityVerificationRequest>(b =>
+        {
+            b.HasIndex(x => x.UserId);
+            b.HasIndex(x => new { x.Status, x.SubmittedAt });
+            b.Property(x => x.DocumentType).HasMaxLength(80);
+            b.Property(x => x.DocumentReference).HasMaxLength(200);
+            b.Property(x => x.ReviewerNote).HasMaxLength(600);
+            b.Property(x => x.KycProvider).HasMaxLength(120);
+            b.Property(x => x.KycReference).HasMaxLength(200);
         });
     }
 }

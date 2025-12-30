@@ -10,6 +10,9 @@ public enum NotificationType
     TripCancelled = 5,
     TripStarted = 6,
     TripCompleted = 7,
+    SafetyAlert = 50,
+    IdentityVerification = 51,
+    DirectMessage = 52,
     System = 99
 }
 

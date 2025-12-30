@@ -18,6 +18,21 @@ public sealed class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponse>> Google([FromBody] GoogleLoginRequest req, CancellationToken ct)
         => Ok(await _auth.GoogleLoginAsync(req, ct));
 
+    [HttpPost("password/register")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AuthResponse>> RegisterWithPassword([FromBody] PasswordRegisterRequest req, CancellationToken ct)
+        => Ok(await _auth.PasswordRegisterAsync(req, ct));
+
+    [HttpPost("password/login")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AuthResponse>> PasswordLogin([FromBody] PasswordLoginRequest req, CancellationToken ct)
+        => Ok(await _auth.PasswordLoginAsync(req, ct));
+
+    [HttpPost("sso")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<AuthResponse>> SsoLogin([FromBody] SsoLoginRequest req, CancellationToken ct)
+        => Ok(await _auth.SsoLoginAsync(req, ct));
+
     [HttpPost("refresh")]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshRequest req, CancellationToken ct)

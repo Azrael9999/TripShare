@@ -1,4 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using TripShare.Application.Abstractions;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
@@ -78,6 +83,7 @@ public sealed class AuthService
         {
             return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
         }
+        EnsureActive(user);
 
         // Issue tokens
         var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
@@ -103,12 +109,166 @@ public sealed class AuthService
         return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
     }
 
+    public async Task<AuthResponse> PasswordRegisterAsync(PasswordRegisterRequest req, CancellationToken ct)
+    {
+        var email = NormalizeEmail(req.Email);
+        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 8)
+            throw new InvalidOperationException("Password must be at least 8 characters.");
+
+        var existing = await _db.Users.SingleOrDefaultAsync(x => x.Email == email, ct);
+        if (existing is not null)
+            throw new InvalidOperationException("An account already exists for this email.");
+
+        var (hash, salt) = HashPassword(req.Password);
+        var user = new User
+        {
+            Email = email,
+            DisplayName = string.IsNullOrWhiteSpace(req.DisplayName) ? email.Split('@')[0] : req.DisplayName,
+            AuthProvider = "password",
+            ProviderUserId = email,
+            PasswordHash = hash,
+            PasswordSalt = salt,
+            EmailVerified = false,
+            PhoneVerified = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(ct);
+
+        await SendVerificationEmailInternalAsync(user, ct);
+        return await PasswordLoginAsync(new PasswordLoginRequest(email, req.Password, req.Timezone, req.Locale), ct);
+    }
+
+    public async Task<AuthResponse> PasswordLoginAsync(PasswordLoginRequest req, CancellationToken ct)
+    {
+        var email = NormalizeEmail(req.Email);
+        var user = await _db.Users.SingleOrDefaultAsync(x => x.Email == email, ct);
+        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || string.IsNullOrWhiteSpace(user.PasswordSalt))
+            throw new InvalidOperationException("Invalid credentials.");
+
+        if (!VerifyPassword(req.Password, user.PasswordHash, user.PasswordSalt))
+            throw new InvalidOperationException("Invalid credentials.");
+
+        if (user.IsSuspended)
+            return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
+        EnsureActive(user);
+
+        user.AuthProvider = "password";
+        user.ProviderUserId = email;
+        user.LastLoginAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var (refresh, refreshHash) = _tokens.CreateRefreshToken();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = refreshHash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(int.TryParse(_cfg["Jwt:RefreshTokenDays"], out var d) ? d : 30),
+            CreatedIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
+        });
+        await _db.SaveChangesAsync(ct);
+
+        if (!user.EmailVerified)
+            await SendVerificationEmailInternalAsync(user, ct);
+
+        return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
+    }
+
+    public async Task<AuthResponse> SsoLoginAsync(SsoLoginRequest req, CancellationToken ct)
+    {
+        var providerKey = $"Auth:Sso:{req.Provider}";
+        var section = _cfg.GetSection(providerKey);
+        var issuer = section["Issuer"];
+        var audience = section["Audience"] ?? _cfg["Jwt:Audience"];
+        var signingKey = section["SigningKey"];
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(signingKey))
+            throw new InvalidOperationException($"SSO provider {req.Provider} is not configured.");
+
+        var handler = new JwtSecurityTokenHandler();
+        var parameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+        ClaimsPrincipal principal;
+        try
+        {
+            principal = handler.ValidateToken(req.IdToken, parameters, out _);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to validate SSO token for provider {Provider}", req.Provider);
+            throw new InvalidOperationException("Unable to validate SSO token.");
+        }
+
+        var sub = principal.FindFirstValue("sub") ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        var email = NormalizeEmail(req.Email ?? principal.FindFirstValue(ClaimTypes.Email) ?? "");
+        if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
+            throw new InvalidOperationException("SSO token missing subject or email.");
+
+        var providerId = $"sso:{req.Provider}";
+        var user = await _db.Users.SingleOrDefaultAsync(x => x.AuthProvider == providerId && x.ProviderUserId == sub, ct);
+        if (user is null)
+        {
+            user = await _db.Users.SingleOrDefaultAsync(x => x.Email == email, ct);
+        }
+
+        if (user is null)
+        {
+            user = new User
+            {
+                Email = email,
+                DisplayName = principal.Identity?.Name ?? email.Split('@')[0],
+                AuthProvider = providerId,
+                ProviderUserId = sub,
+                EmailVerified = true,
+                IdentityVerified = false
+            };
+            _db.Users.Add(user);
+        }
+        else
+        {
+            EnsureActive(user);
+            user.AuthProvider = providerId;
+            user.ProviderUserId = sub;
+            user.Email = email;
+        }
+
+        user.LastLoginAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        if (user.IsSuspended)
+            return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
+
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var (refresh, refreshHash) = _tokens.CreateRefreshToken();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = refreshHash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(int.TryParse(_cfg["Jwt:RefreshTokenDays"], out var d) ? d : 30),
+            CreatedIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
+        });
+        await _db.SaveChangesAsync(ct);
+
+        return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
+    }
+
     public async Task<AuthResponse> RefreshAsync(RefreshRequest req, CancellationToken ct)
     {
         var hash = _tokens.HashToken(req.RefreshToken);
         var token = await _db.RefreshTokens.Include(x => x.User).SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
         if (token?.User is null || !token.IsActive || token.User.IsSuspended)
             throw new InvalidOperationException("Invalid refresh token.");
+        EnsureActive(token.User);
 
         // rotate
         token.RevokedAt = DateTimeOffset.UtcNow;
@@ -133,6 +293,7 @@ public sealed class AuthService
     public async Task ResendVerificationAsync(Guid userId, CancellationToken ct)
     {
         var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
+        EnsureActive(user);
         if (user.EmailVerified) return;
         await SendVerificationEmailInternalAsync(user, ct);
     }
@@ -148,6 +309,7 @@ public sealed class AuthService
 
         rec.UsedAt = DateTimeOffset.UtcNow;
         rec.User.EmailVerified = true;
+        EnsureActive(rec.User);
 
         await _db.SaveChangesAsync(ct);
     }
@@ -180,6 +342,10 @@ public sealed class AuthService
         else if (user.IsSuspended)
         {
             throw new InvalidOperationException("Account is suspended.");
+        }
+        else
+        {
+            EnsureActive(user);
         }
 
         var active = await _db.SmsOtpTokens
@@ -226,6 +392,7 @@ public sealed class AuthService
         var user = token.User;
         if (user.IsSuspended)
             throw new InvalidOperationException("Account is suspended.");
+        EnsureActive(user);
         user.PhoneNumber ??= phone;
         user.PhoneVerified = true;
         user.EmailVerified = true; // treat verified phone as verified gate
@@ -279,7 +446,79 @@ public sealed class AuthService
         _log.LogInformation("Verification email queued for {Email}", user.Email);
     }
 
-    private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.DriverVerified, u.Role);
+    public async Task UpdateProfileAsync(Guid userId, UpdateProfileRequest req, CancellationToken ct)
+    {
+        var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
+        EnsureActive(user);
+
+        if (!string.IsNullOrWhiteSpace(req.DisplayName))
+            user.DisplayName = req.DisplayName.Trim();
+
+        user.PhotoUrl = string.IsNullOrWhiteSpace(req.PhotoUrl) ? null : req.PhotoUrl.Trim();
+        if (!string.IsNullOrWhiteSpace(req.PhoneNumber))
+            user.PhoneNumber = NormalizePhone(req.PhoneNumber);
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<AccountExportDto> ExportAccountAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await _db.Users.AsNoTracking().SingleAsync(x => x.Id == userId, ct);
+        EnsureActive(user);
+
+        var trips = await _db.Trips.AsNoTracking()
+            .Where(x => x.DriverId == userId)
+            .Select(x => new { x.Id, x.Status, x.DepartureTimeUtc, x.Currency, x.Notes })
+            .ToListAsync(ct);
+
+        var bookings = await _db.Bookings.AsNoTracking()
+            .Where(x => x.PassengerId == userId)
+            .Select(x => new { x.Id, x.TripId, x.Status, x.CreatedAt, x.Currency })
+            .ToListAsync(ct);
+
+        var ratings = await _db.Ratings.AsNoTracking()
+            .Where(x => x.FromUserId == userId || x.ToUserId == userId)
+            .Select(x => new { x.Id, x.BookingId, x.FromUserId, x.ToUserId, x.Stars, x.Comment, x.CreatedAt })
+            .ToListAsync(ct);
+
+        var reports = await _db.Reports.AsNoTracking()
+            .Where(x => x.ReporterUserId == userId || x.TargetUserId == userId)
+            .Select(x => new { x.Id, x.TargetType, x.TargetUserId, x.TripId, x.BookingId, x.Reason, x.Status, x.CreatedAt })
+            .ToListAsync(ct);
+
+        var messages = await (from m in _db.Messages.AsNoTracking()
+                              join t in _db.MessageThreads.AsNoTracking() on m.ThreadId equals t.Id
+                              where t.ParticipantAId == userId || t.ParticipantBId == userId || m.SenderId == userId
+                              select new { m.Id, m.ThreadId, m.Body, m.SentAt, m.IsSystem })
+            .ToListAsync(ct);
+
+        return new AccountExportDto(
+            user.Email,
+            user.DisplayName,
+            user.EmailVerified,
+            user.PhoneVerified,
+            user.IdentityVerified,
+            trips.Cast<object>().ToList(),
+            bookings.Cast<object>().ToList(),
+            ratings.Cast<object>().ToList(),
+            reports.Cast<object>().ToList(),
+            messages.Cast<object>().ToList());
+    }
+
+    public async Task DeleteAccountAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await _db.Users.Include(x => x.RefreshTokens).FirstAsync(x => x.Id == userId, ct);
+        EnsureActive(user);
+        user.IsDeleted = true;
+        user.DeletedAt = DateTimeOffset.UtcNow;
+        foreach (var token in user.RefreshTokens.Where(x => x.RevokedAt == null))
+        {
+            token.RevokedAt = DateTimeOffset.UtcNow;
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private static UserMeDto Me(User u) => new(u.Id, u.Email, u.EmailVerified, u.DisplayName, u.PhotoUrl, u.IsDriver, u.DriverVerified, u.IdentityVerified, u.PhoneVerified, u.Role);
 
     private static string NormalizePhone(string phone)
     {
@@ -292,5 +531,35 @@ public sealed class AuthService
     {
         var digits = new string(phone.Where(char.IsDigit).ToArray());
         return digits.Length >= 4 ? digits[^4..] : digits;
+    }
+
+    private static (string hash, string salt) HashPassword(string password)
+    {
+        var saltBytes = RandomNumberGenerator.GetBytes(16);
+        var hashBytes = Rfc2898DeriveBytes.Pbkdf2(password, saltBytes, 12000, HashAlgorithmName.SHA256, 32);
+        return (Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
+    }
+
+    private static bool VerifyPassword(string password, string storedHash, string storedSalt)
+    {
+        if (string.IsNullOrWhiteSpace(storedHash) || string.IsNullOrWhiteSpace(storedSalt)) return false;
+        var saltBytes = Convert.FromBase64String(storedSalt);
+        var hashBytes = Rfc2898DeriveBytes.Pbkdf2(password, saltBytes, 12000, HashAlgorithmName.SHA256, 32);
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(hashBytes, Convert.FromBase64String(storedHash));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
+    private static void EnsureActive(User user)
+    {
+        if (user.IsDeleted)
+            throw new InvalidOperationException("This account has been deleted.");
     }
 }

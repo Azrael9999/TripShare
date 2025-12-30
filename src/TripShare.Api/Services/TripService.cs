@@ -43,7 +43,7 @@ public sealed class TripService
         if (await _settings.GetDriverVerificationRequiredAsync(ct))
         {
             var driver = await _db.Users.AsNoTracking().SingleAsync(x => x.Id == driverId, ct);
-            if (!driver.DriverVerified)
+            if (!driver.DriverVerified && !driver.IdentityVerified)
                 throw new InvalidOperationException("Driver verification is required before creating trips.");
         }
 

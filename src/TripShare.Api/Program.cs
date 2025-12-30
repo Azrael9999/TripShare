@@ -137,6 +137,17 @@ builder.Services.AddRateLimiter(opt =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
+
+    opt.AddPolicy("verification", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User?.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "verify-unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(10),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
 });
 
 // EF Core
@@ -179,6 +190,9 @@ builder.Services.AddScoped<BlockService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<SiteSettingsService>();
+builder.Services.AddScoped<SafetyService>();
+builder.Services.AddScoped<MessagingService>();
+builder.Services.AddScoped<IdentityVerificationService>();
 builder.Services.AddHostedService<BookingHousekeepingService>();
 builder.Services.AddSingleton<IBackgroundJobQueue, BackgroundJobQueue>();
 builder.Services.AddHostedService<BackgroundJobHostedService>();

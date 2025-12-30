@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using DbUp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +36,7 @@ builder.Host.UseSerilog((ctx, lc) =>
     if (!string.IsNullOrWhiteSpace(aiConnectionString))
     {
         lc.WriteTo.ApplicationInsights(
-            configureTelemetryConfiguration: config => config.ConnectionString = aiConnectionString,
+            telemetryConfiguration: new TelemetryConfiguration { ConnectionString = aiConnectionString },
             telemetryConverter: new TraceTelemetryConverter());
     }
 });
@@ -86,6 +87,7 @@ builder.Services.AddHealthChecks()
     .AddSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Missing ConnectionStrings:DefaultConnection"),
+        healthQuery: "SELECT 1",
         name: "db",
         failureStatus: HealthStatus.Unhealthy);
 

@@ -108,3 +108,36 @@ export type VehicleProfile = {
   plateNumber: string
   seatCount: number
 }
+
+export type EmergencyContact = {
+  id: string
+  name: string
+  phoneNumber?: string
+  email?: string
+  shareLiveTripsByDefault: boolean
+}
+
+export type ShareLinkResponse = {
+  token: string
+  expiresAt: string
+}
+
+export type MessageThread = {
+  id: string
+  tripId?: string
+  bookingId?: string
+  participantAId: string
+  participantBId: string
+  isClosed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type MessageItem = {
+  id: string
+  threadId: string
+  senderId: string
+  body: string
+  isSystem: boolean
+  sentAt: string
+}

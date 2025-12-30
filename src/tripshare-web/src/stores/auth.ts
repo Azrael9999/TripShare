@@ -95,6 +95,10 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem(LS_KEY)
     },
 
+    async resendVerification() {
+      await http.post('/users/me/resend-verification')
+    },
+
     async googleLogin(idToken: string) {
       const resp = await http.post<AuthResponse>('/auth/google', { idToken })
       this.accessToken = resp.data.accessToken

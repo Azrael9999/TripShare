@@ -1,8 +1,12 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TripShare.Api.Helpers;
 using TripShare.Api.Services;
+using TripShare.Application.Contracts;
+using TripShare.Domain.Entities;
 using TripShare.Infrastructure.Data;
 
 namespace TripShare.Api.Controllers;
@@ -14,12 +18,14 @@ public sealed class UsersController : ControllerBase
     private readonly AppDbContext _db;
     private readonly AuthService _auth;
     private readonly RatingService _ratings;
+    private readonly IdentityVerificationService _identity;
 
-    public UsersController(AppDbContext db, AuthService auth, RatingService ratings)
+    public UsersController(AppDbContext db, AuthService auth, RatingService ratings, IdentityVerificationService identity)
     {
         _db = db;
         _auth = auth;
         _ratings = ratings;
+        _identity = identity;
     }
 
     [Authorize]
@@ -39,15 +45,20 @@ public sealed class UsersController : ControllerBase
             user.PhotoUrl,
             user.IsDriver,
             user.DriverVerified,
+            user.IdentityVerified,
+            user.PhoneVerified,
             user.Role,
             driverVerifiedAt = user.DriverVerifiedAt,
             driverVerificationNote = user.DriverVerificationNote,
+            identityVerifiedAt = user.IdentityVerifiedAt,
+            phoneVerified = user.PhoneVerified,
             ratingAverage = avg,
             vehicle = user.Vehicle == null ? null : new { user.Vehicle.Make, user.Vehicle.Model, user.Vehicle.Color, user.Vehicle.PlateNumber, user.Vehicle.Seats }
         });
     }
 
     [Authorize]
+    [EnableRateLimiting("verification")]
     [HttpPost("me/resend-verification")]
     public async Task<IActionResult> ResendVerification(CancellationToken ct)
     {
@@ -63,8 +74,50 @@ public sealed class UsersController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
+    [HttpGet("me/identity-verification")]
+    public async Task<ActionResult<IdentityVerificationDto?>> IdentityVerificationStatus(CancellationToken ct)
+    {
+        var req = await _identity.GetLatestAsync(User.GetUserId(), ct);
+        if (req is null) return Ok(null);
+        return Ok(ToDto(req));
+    }
 
-public sealed record UpsertVehicleRequest(string Make, string Model, string Color, string? PlateNumber, int Seats);
+    [Authorize]
+    [HttpPost("me/identity-verification")]
+    public async Task<ActionResult<IdentityVerificationDto>> SubmitIdentityVerification([FromBody] IdentityVerificationSubmission submission, CancellationToken ct)
+    {
+        var req = await _identity.SubmitAsync(User.GetUserId(), submission, ct);
+        return Ok(ToDto(req));
+    }
+
+    [Authorize]
+    [HttpPut("me/profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest req, CancellationToken ct)
+    {
+        await _auth.UpdateProfileAsync(User.GetUserId(), req, ct);
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpGet("me/export")]
+    public async Task<IActionResult> Export(CancellationToken ct)
+    {
+        var export = await _auth.ExportAccountAsync(User.GetUserId(), ct);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(export);
+        return File(bytes, "application/json", $"tripshare-account-{User.GetUserId()}.json");
+    }
+
+    [Authorize]
+    [HttpDelete("me")]
+    public async Task<IActionResult> DeleteMe(CancellationToken ct)
+    {
+        await _auth.DeleteAccountAsync(User.GetUserId(), ct);
+        return NoContent();
+    }
+
+
+    public sealed record UpsertVehicleRequest(string Make, string Model, string Color, string? PlateNumber, int Seats);
 
     [Authorize]
     [HttpGet("me/vehicle")]
@@ -115,4 +168,6 @@ public sealed record UpsertVehicleRequest(string Make, string Model, string Colo
         return NoContent();
     }
 
+    private static IdentityVerificationDto ToDto(IdentityVerificationRequest req)
+        => new(req.Id, req.Status, req.DocumentType, req.DocumentReference, req.SubmittedAt, req.ReviewedAt, req.ReviewerNote, req.KycProvider, req.KycReference);
 }

@@ -4,9 +4,17 @@ import router from './router'
 import App from './App.vue'
 import './styles.css'
 import { telemetryClient } from './lib/telemetryClient'
+import { applySeo, upsertLdJson } from './lib/seo'
+import { brandConfig } from './lib/branding'
 
 router.afterEach((to) => {
   telemetryClient.trackPageView(to.name?.toString() ?? to.path, window.location.href)
+  const title = to.meta?.title as string | undefined
+  applySeo({
+    title,
+    url: window.location.href,
+    image: brandConfig.heroImageUrl
+  })
 })
 
 const app = createApp(App)
@@ -32,6 +40,20 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? 'unknown rejection'))
   telemetryClient.trackError(reason, { source: 'unhandledrejection' })
+})
+
+// Organization structured data (static)
+upsertLdJson('org', {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'TripShare Sri Lanka',
+  url: window.location.origin,
+  logo: brandConfig.logoUrl,
+  sameAs: [
+    'https://www.facebook.com',
+    'https://www.instagram.com'
+  ],
+  areaServed: 'LK'
 })
 
 app.use(createPinia()).use(router).mount('#app')

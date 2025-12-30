@@ -1,5 +1,5 @@
 <template>
-  <div v-if="ready && shouldRender" class="card p-4">
+  <div v-if="ready && shouldRender" class="card p-4 shadow-none bg-slate-50/80 border-slate-100">
     <div class="text-xs uppercase tracking-wide text-slate-500 flex items-center gap-2">
       Sponsored
       <span v-if="!slot?.enabled" class="badge bg-amber-50 text-amber-700 border-amber-100">Paused</span>

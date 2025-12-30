@@ -4,7 +4,7 @@
 
   <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     <section class="lg:col-span-8 space-y-4">
-      <div class="card p-6">
+      <div class="card p-6 card-raise">
         <div class="flex items-start justify-between gap-4">
           <div>
             <div class="badge">{{ dayjs(trip.departureTimeUtc).format('MMM D, YYYY HH:mm') }} UTC</div>
@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      <div class="card p-6">
+      <div class="card p-6 card-raise">
         <div class="text-sm font-semibold text-slate-700">Segment prices</div>
         <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div v-for="s in trip.segments" :key="s.id" class="rounded-xl border border-slate-100 p-4">
@@ -72,7 +72,7 @@
         </div>
       </div>
 
-      <div class="card p-6">
+      <div class="card p-6 card-raise">
         <div class="flex items-center justify-between gap-3">
           <div class="text-sm font-semibold text-slate-700">Live ETA & status</div>
           <button class="btn-ghost" @click="loadEta" :disabled="etaLoading">Refresh</button>
@@ -97,7 +97,19 @@
     </section>
 
     <aside class="lg:col-span-4 space-y-4">
-      <div class="card p-6">
+      <div class="card p-0 overflow-hidden card-raise">
+        <div class="relative h-56">
+          <div class="absolute inset-0" :style="mapBgStyle"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/25 to-transparent"></div>
+          <div class="relative h-full flex flex-col justify-end p-5 text-white">
+            <div class="text-xs uppercase tracking-wide text-white/70">Route snapshot</div>
+            <div class="text-xl font-semibold mt-1">Live route preview</div>
+            <p class="text-sm text-white/80 mt-1">Recent driver location and stops visualized for quick context.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-6 card-raise">
         <div class="text-lg font-semibold">Book seats</div>
 
         <div v-if="!auth.isAuthenticated" class="mt-2 text-sm text-slate-600">
@@ -109,6 +121,9 @@
         </div>
 
         <div v-else class="mt-4 space-y-3">
+          <div class="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm px-3 py-2">
+            Community-powered reminder: TripShare only connects riders and drivers. Payment and ride agreements are handled directly between users.
+          </div>
           <div>
             <label class="text-sm text-slate-600">Pickup</label>
             <select v-model="pickupId" class="input mt-1">
@@ -221,13 +236,15 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { http } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
 import AdSlot from '../components/AdSlot.vue'
+import { brandConfig, hasImage } from '../lib/branding'
+import { applySeo, upsertLdJson } from '../lib/seo'
 dayjs.extend(relativeTime)
 
 const route = useRoute()
@@ -249,6 +266,12 @@ const etaResults = ref<any[]>([])
 const etaError = ref('')
 const etaLoading = ref(false)
 const refreshHandle = ref<number | undefined>()
+const mapBgStyle = computed(() => {
+  const url = hasImage(brandConfig.mapOverlayUrl) ? `url('${brandConfig.mapOverlayUrl}')` : ''
+  return url
+    ? { backgroundImage: `${url}`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { backgroundImage: 'linear-gradient(135deg, #0f172a, #1d4ed8)' }
+})
 
 // Share link
 const shareMinutes = ref(120)
@@ -424,6 +447,58 @@ async function copyShareLink() {
 
 onBeforeUnmount(() => {
   if (refreshHandle.value) window.clearInterval(refreshHandle.value)
+})
+
+onMounted(() => {
+  applySeo({
+    title: 'Trip details | TripShare Sri Lanka',
+    description: 'View live ETAs, verified driver details, and segment pricing for this TripShare ride.',
+    url: window.location.href,
+    image: brandConfig.mapOverlayUrl,
+    type: 'article'
+  })
+
+  upsertLdJson('trip-breadcrumb', {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: window.location.origin },
+      { '@type': 'ListItem', position: 2, name: 'Trip details', item: window.location.href }
+    ]
+  })
+})
+
+watch(trip, (t) => {
+  if (!t) return
+  const start = t.routePoints?.[0]?.displayAddress
+  const end = t.routePoints?.[t.routePoints.length - 1]?.displayAddress
+  const title = start && end ? `${start} to ${end} ride | TripShare Sri Lanka` : 'Trip details | TripShare Sri Lanka'
+  const description = `Book seats on a verified TripShare driver from ${start ?? 'pickup'} to ${end ?? 'drop-off'} with live ETAs and safety sharing.`
+  applySeo({
+    title,
+    description,
+    url: window.location.href,
+    image: t.driverPhotoUrl || brandConfig.mapOverlayUrl,
+    type: 'article'
+  })
+
+  upsertLdJson('trip', {
+    '@context': 'https://schema.org',
+    '@type': 'Trip',
+    name: title,
+    description,
+    provider: {
+      '@type': 'Organization',
+      name: 'TripShare Sri Lanka',
+      url: window.location.origin
+    },
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: t.currency || 'LKR',
+      availability: 'https://schema.org/InStock'
+    },
+    areaServed: 'LK'
+  })
 })
 </script>
 

@@ -2,8 +2,9 @@
   <header class="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-slate-100">
     <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
       <RouterLink to="/" class="flex items-center gap-3">
-        <div class="h-9 w-9 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 shadow-soft flex items-center justify-center">
-          <span class="text-white font-semibold text-sm">TS</span>
+        <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 shadow-soft flex items-center justify-center overflow-hidden">
+          <img v-if="brandLogo" :src="brandLogo" alt="TripShare logo" class="h-full w-full object-cover" />
+          <span v-else class="text-white font-semibold text-sm">TS</span>
         </div>
         <div class="leading-tight">
           <div class="font-semibold">TripShare</div>
@@ -53,10 +54,10 @@
     </div>
 
     <!-- Login modal -->
-    <div v-if="openLogin" class="fixed inset-0 z-40 bg-slate-900/40 flex items-center justify-center p-4">
-      <div class="card w-full max-w-md p-5">
-        <div class="flex items-start justify-between">
-          <div>
+    <div v-if="openLogin" class="fixed inset-0 z-40 bg-slate-900/40 flex items-center justify-center p-4 soft-modal">
+      <div class="card w-full max-w-xl p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1">
             <div class="text-lg font-semibold">Sign in</div>
             <p class="text-sm text-slate-600 mt-1">
               Trips can be created and booked only after email verification.
@@ -64,39 +65,47 @@
           </div>
           <button class="btn-ghost" @click="openLogin=false"><XMarkIcon class="h-5 w-5"/></button>
         </div>
-        <div class="mt-5 space-y-4">
-          <div>
-            <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Google</p>
-            <GoogleSignIn @success="onGoogleSuccess" />
-          </div>
-          <div class="border-t border-slate-100 pt-4">
-            <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">SMS OTP</p>
-            <div class="space-y-3">
-              <div class="space-y-1">
-                <label class="block text-xs text-slate-600">Phone number</label>
-                <input v-model="smsPhone" class="input" placeholder="+94..." />
-              </div>
-              <div class="flex items-center gap-3">
-                <button class="btn-secondary" :disabled="sendingOtp || !smsPhone" @click="sendSmsOtp">
-                  <span v-if="sendingOtp">Sending...</span>
-                  <span v-else>Send code</span>
-                </button>
-                <span v-if="otpSent" class="text-xs text-green-700">Code sent</span>
-              </div>
-              <div class="space-y-1">
-                <label class="block text-xs text-slate-600">Enter code</label>
-                <input v-model="smsOtp" class="input" placeholder="6-digit code" />
-              </div>
-              <button class="btn-primary w-full" :disabled="verifying || !smsOtp" @click="verifySms">
-                <span v-if="verifying">Verifying...</span>
-                <span v-else>Sign in with SMS</span>
-              </button>
-              <p v-if="smsError" class="text-xs text-red-600">{{ smsError }}</p>
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="hidden sm:block">
+            <div class="h-full w-full bg-gradient-to-br from-brand-50 to-white rounded-xl flex items-center justify-center border border-slate-100">
+              <img v-if="brandLoginIllustration" :src="brandLoginIllustration" alt="Sign-in illustration" class="max-h-40 object-contain" />
+              <div v-else class="text-xs text-slate-500 text-center px-3">Secure sign-in</div>
             </div>
           </div>
-          <p class="text-xs text-slate-500">
-            By continuing you agree to the Terms and Privacy Policy (placeholders).
-          </p>
+          <div class="sm:col-span-2 space-y-4">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Google</p>
+              <GoogleSignIn @success="onGoogleSuccess" />
+            </div>
+            <div class="border-t border-slate-100 pt-4">
+              <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">SMS OTP</p>
+              <div class="space-y-3">
+                <div class="space-y-1">
+                  <label class="block text-xs text-slate-600">Phone number</label>
+                  <input v-model="smsPhone" class="input" placeholder="+94..." />
+                </div>
+                <div class="flex items-center gap-3">
+                  <button class="btn-secondary" :disabled="sendingOtp || !smsPhone" @click="sendSmsOtp">
+                    <span v-if="sendingOtp">Sending...</span>
+                    <span v-else>Send code</span>
+                  </button>
+                  <span v-if="otpSent" class="text-xs text-green-700">Code sent</span>
+                </div>
+                <div class="space-y-1">
+                  <label class="block text-xs text-slate-600">Enter code</label>
+                  <input v-model="smsOtp" class="input" placeholder="6-digit code" />
+                </div>
+                <button class="btn-primary w-full" :disabled="verifying || !smsOtp" @click="verifySms">
+                  <span v-if="verifying">Verifying...</span>
+                  <span v-else>Sign in with SMS</span>
+                </button>
+                <p v-if="smsError" class="text-xs text-red-600">{{ smsError }}</p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500">
+              By continuing you agree to the Terms and Privacy Policy (placeholders).
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -104,10 +113,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import GoogleSignIn from './GoogleSignIn.vue'
 import { http } from '../lib/api'
+import { brandConfig, hasImage } from '../lib/branding'
 import {
   ArrowRightOnRectangleIcon,
   BellIcon,
@@ -126,6 +136,8 @@ const sendingOtp = ref(false)
 const verifying = ref(false)
 const normalizedPhone = computed(() => smsPhone.value.trim())
 const isValidSriLankaPhone = computed(() => isLkPhone(normalizedPhone.value))
+const brandLogo = computed(() => (hasImage(brandConfig.logoUrl) ? brandConfig.logoUrl : ''))
+const brandLoginIllustration = computed(() => (hasImage(brandConfig.loginIllustrationUrl) ? brandConfig.loginIllustrationUrl : ''))
 
 async function refreshUnread() {
   if (!auth.isAuthenticated) { unreadCount.value = 0; return }

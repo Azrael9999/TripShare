@@ -19,21 +19,21 @@ import { useAuthStore } from '../stores/auth'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: Home },
-    { path: '/trips/:id', component: TripDetails },
-    { path: '/create', component: CreateTrip, meta: { requiresAuth: true, requiresVerified: true } },
-    { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true } },
-    { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true } },
-    { path: '/notifications', component: Notifications, meta: { requiresAuth: true } },
-    { path: '/messages', component: Messages, meta: { requiresAuth: true } },
-    { path: '/profile', component: Profile, meta: { requiresAuth: true } },
-    { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true } },
-    { path: '/safety', component: Safety, meta: { requiresAuth: true } },
-    { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true } },
-    { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true } },
-    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true } },
-    { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true } },
-    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true } }
+    { path: '/', component: Home, meta: { title: 'TripShare Sri Lanka | Carpool & Ride Sharing' } },
+    { path: '/trips/:id', component: TripDetails, meta: { title: 'Trip details | TripShare Sri Lanka' } },
+    { path: '/create', component: CreateTrip, meta: { requiresAuth: true, requiresVerified: true, title: 'Create trip | TripShare' } },
+    { path: '/my-trips', component: MyTrips, meta: { requiresAuth: true, requiresVerified: true, title: 'My trips | TripShare' } },
+    { path: '/bookings', component: MyBookings, meta: { requiresAuth: true, requiresVerified: true, title: 'My bookings | TripShare' } },
+    { path: '/notifications', component: Notifications, meta: { requiresAuth: true, title: 'Alerts | TripShare' } },
+    { path: '/messages', component: Messages, meta: { requiresAuth: true, title: 'Messages | TripShare' } },
+    { path: '/profile', component: Profile, meta: { requiresAuth: true, title: 'Profile | TripShare' } },
+    { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true, title: 'Vehicle profile | TripShare' } },
+    { path: '/safety', component: Safety, meta: { requiresAuth: true, title: 'Safety | TripShare' } },
+    { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true, title: 'Verify email | TripShare' } },
+    { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin | TripShare' } },
+    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin reports | TripShare' } },
+    { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin identity | TripShare' } },
+    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | TripShare' } }
   ]
 })
 

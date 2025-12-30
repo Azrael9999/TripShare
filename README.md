@@ -33,7 +33,7 @@ A production-oriented starter for a ride sharing / carpool app.
 ### 1) Database
 Install SQL Server (LocalDB or full SQL Server).
 
-Set the connection string in `src/TripShare.Api/appsettings.Development.json`:
+Set the connection string in `src/TripShare.Api/appsettings.Development.json` (key: `ConnectionStrings:DefaultConnection`):
 
 `Server=localhost;Database=TripShareDb;Trusted_Connection=True;TrustServerCertificate=True;`
 
@@ -51,6 +51,7 @@ Open folder `src/tripshare-web` in VS (or any terminal).
 Copy `.env.example` to `.env` and set:
 - `VITE_API_BASE=http://localhost:8080`
 - `VITE_GOOGLE_CLIENT_ID=...`
+- `VITE_GOOGLE_MAPS_API_KEY=...` (for Places autocomplete + details; debounced and cached)
 
 Then:
 ```bash
@@ -87,6 +88,11 @@ The UI includes **placeholder ad slots** in:
 
 Replace `AdSlot.vue` with your ad provider integration (AdSense, etc.). Keep it subtle (no popups).
 
+## Google Maps / Places efficiency
+- Frontend search uses a debounced + cached Places autocomplete (per-query TTL ~5 minutes) and Place Details cache (per-place TTL ~10 minutes) to reduce calls without hurting UX.
+- Selecting a suggestion reuses the same session token to keep billing optimized, then rotates to a fresh token for the next interaction.
+- Configure `VITE_GOOGLE_MAPS_API_KEY` in `src/tripshare-web/.env` for local runs and in your Azure environment for production.
+
 ## Security notes
 - Refresh tokens are stored as SHA-256 hashes
 - Refresh token rotation is enabled
@@ -106,6 +112,32 @@ Replace `AdSlot.vue` with your ad provider integration (AdSense, etc.). Keep it 
 ```bash
 docker compose up --build
 ```
+
+## Deploying to Azure (API + Web)
+### API (App Service or Container Apps)
+1. Build & push Docker image (optional): `docker build -t <registry>/tripshare-api:latest -f src/TripShare.Api/Dockerfile .` then push to ACR; or let App Service build from GitHub.
+2. Create SQL Database/Server and capture the connection string.
+3. Create an App Service (Linux, container recommended) or Container App and set environment variables:
+   - `ConnectionStrings__DefaultConnection=<SQL connection string>`
+   - `Jwt__SigningKey=<long random secret>`
+   - `Cors__AllowedOrigins__0=https://<your-web-domain>`
+   - `Email__Mode=Smtp`, `Email__SmtpHost`, `Email__SmtpPort`, `Email__SmtpUser`, `Email__SmtpPass`, `Email__FromEmail`, `Email__FromName`
+   - `Sms__Provider=TextLk`, `Sms__TextLk__ApiKey`, `Sms__TextLk__SenderId` (optional)
+   - `ApplicationInsights__ConnectionString=<AI connection string>` (optional)
+4. Expose port 8080 (already set in Dockerfile) and configure a health probe at `/health`.
+
+### Web (Azure Static Web Apps or Azure App Service)
+1. Build locally: `cd src/tripshare-web && npm install && npm run build` (outputs `dist/`).
+2. For Static Web Apps: app location `src/tripshare-web`, output location `dist`, environment variables:
+   - `VITE_API_BASE=https://<api-host>`
+   - `VITE_GOOGLE_CLIENT_ID=<web client id>`
+   - `VITE_GOOGLE_MAPS_API_KEY=<maps key>`
+3. For App Service (Linux): serve the `dist` folder via `nginx` or similar static host, with the same env variables at build time.
+4. Align API CORS origins with your web host.
+
+### Local (Visual Studio / VS Code)
+- Open `TripShare.sln`, ensure `ConnectionStrings:DefaultConnection` is set, and run `TripShare.Api`.
+- In `src/tripshare-web`, copy `.env.example` to `.env`, set API base + Google keys, then `npm install && npm run dev`.
 
 ## Production readiness upgrades (included)
 - Deterministic DB schema setup using **DbUp** embedded SQL scripts (see `src/TripShare.Api/DbUp/Scripts`).

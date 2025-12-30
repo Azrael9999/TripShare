@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using TripShare.Api.Services;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
+using TripShare.Api.Helpers;
 using TripShare.Infrastructure.Data;
 
 namespace TripShare.Api.Controllers;

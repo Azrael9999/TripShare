@@ -11,6 +11,7 @@
         <div class="flex flex-wrap gap-2">
           <button class="btn-outline" type="button" @click="dismiss">Maybe later</button>
           <button class="btn-primary" type="button" @click="acknowledgeDisabled">I disabled it</button>
+          <button class="btn-ghost" type="button" @click="reduceAds">Reduce ads</button>
         </div>
       </div>
     </div>
@@ -19,9 +20,11 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useAdsStore } from '../stores/ads'
 
 const show = ref(false)
 const DISMISS_KEY = 'tripshare.adblock.dismissed'
+const ads = useAdsStore()
 
 function dismiss() {
   localStorage.setItem(DISMISS_KEY, '1')
@@ -31,6 +34,11 @@ function dismiss() {
 function acknowledgeDisabled() {
   localStorage.setItem(DISMISS_KEY, '1')
   show.value = false
+}
+
+function reduceAds() {
+  ads.setUserReduced(true)
+  dismiss()
 }
 
 function detectAdBlock() {

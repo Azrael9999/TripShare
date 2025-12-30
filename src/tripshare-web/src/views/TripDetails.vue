@@ -24,6 +24,18 @@
           </div>
         </div>
 
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <span class="chip">Status: {{ trip.status }}</span>
+          <span v-if="trip.locationUpdatedAtUtc" class="chip">Location {{ dayjs(trip.locationUpdatedAtUtc).fromNow() }}</span>
+        </div>
+        <div
+          v-if="trip.currentLat !== null && trip.currentLat !== undefined && trip.currentLng !== null && trip.currentLng !== undefined"
+          class="mt-1 text-xs text-slate-600"
+        >
+          Driver: {{ Number(trip.currentLat).toFixed(4) }}, {{ Number(trip.currentLng).toFixed(4) }}
+          <span v-if="trip.currentHeading !== null && trip.currentHeading !== undefined">· heading {{ trip.currentHeading }}°</span>
+        </div>
+
         <div class="mt-5">
           <div class="text-sm font-semibold text-slate-700">Stops</div>
           <ol class="mt-3 space-y-2">
@@ -51,6 +63,26 @@
               {{ nameOfPoint(s.fromRoutePointId) }} → {{ nameOfPoint(s.toRoutePointId) }}
             </div>
             <div class="text-lg font-semibold mt-2">{{ s.price }} {{ s.currency }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center justify-between gap-3">
+          <div class="text-sm font-semibold text-slate-700">Live ETA & status</div>
+          <button class="btn-ghost" @click="loadEta" :disabled="etaLoading">Refresh</button>
+        </div>
+        <div class="mt-3 space-y-2 text-sm text-slate-700">
+          <div>Status: <span class="badge">{{ trip.status }}</span></div>
+          <div v-if="etaError" class="text-xs text-red-600">{{ etaError }}</div>
+          <div v-else-if="etaResults.length===0" class="text-xs text-slate-500">No live ETA yet. Join the trip as a passenger or driver to see estimates.</div>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div v-for="e in etaResults" :key="e.bookingId" class="rounded-xl border border-slate-100 p-3 bg-white">
+              <div class="text-xs text-slate-500">Booking {{ e.bookingId }}</div>
+              <div class="font-semibold mt-1">Pickup: {{ formatSeconds(e.etaToPickupSeconds) }}</div>
+              <div class="text-sm text-slate-600">Drop-off: {{ formatSeconds(e.etaToDropoffSeconds) }}</div>
+              <div class="text-xs text-slate-500 mt-1">Updated {{ dayjs(e.calculatedAtUtc).fromNow() }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -86,6 +118,48 @@
             </select>
           </div>
 
+          <div class="rounded-2xl border border-slate-100 p-3 bg-slate-50 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="text-sm font-semibold text-slate-700">Pickup pin</div>
+              <button class="btn-ghost text-xs" type="button" @click="snapPickupToStop">Snap to stop</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-slate-500">Lat</label>
+                <input v-model.number="pickupPin.lat" type="number" step="0.0001" class="input mt-1" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-500">Lng</label>
+                <input v-model.number="pickupPin.lng" type="number" step="0.0001" class="input mt-1" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">Place label</label>
+              <input v-model="pickupPin.placeName" type="text" class="input mt-1" placeholder="Apartment lobby, gate number, etc." />
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-100 p-3 bg-slate-50 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="text-sm font-semibold text-slate-700">Drop-off pin</div>
+              <button class="btn-ghost text-xs" type="button" @click="snapDropoffToStop">Snap to stop</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-slate-500">Lat</label>
+                <input v-model.number="dropoffPin.lat" type="number" step="0.0001" class="input mt-1" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-500">Lng</label>
+                <input v-model.number="dropoffPin.lng" type="number" step="0.0001" class="input mt-1" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">Place label</label>
+              <input v-model="dropoffPin.placeName" type="text" class="input mt-1" placeholder="Lobby, curbside, etc." />
+            </div>
+          </div>
+
           <div class="flex gap-3">
             <div class="flex-1">
               <label class="text-sm text-slate-600">Seats</label>
@@ -116,12 +190,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import { http } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
 import AdSlot from '../components/AdSlot.vue'
+dayjs.extend(relativeTime)
 
 const route = useRoute()
 const router = useRouter()
@@ -132,26 +208,66 @@ const loading = ref(true)
 
 const pickupId = ref<string>('')
 const dropoffId = ref<string>('')
+const pickupPin = ref<{ lat: number; lng: number; placeName: string; placeId: string }>({ lat: 0, lng: 0, placeName: '', placeId: '' })
+const dropoffPin = ref<{ lat: number; lng: number; placeName: string; placeId: string }>({ lat: 0, lng: 0, placeName: '', placeId: '' })
 const seats = ref<number>(1)
 const booking = ref(false)
 const error = ref('')
 
-async function load() {
-  loading.value = true
+const etaResults = ref<any[]>([])
+const etaError = ref('')
+const etaLoading = ref(false)
+const refreshHandle = ref<number | undefined>()
+
+async function load(initial = false) {
+  if (initial) loading.value = true
   try {
     const resp = await http.get(`/trips/${route.params.id}`)
     trip.value = resp.data
-    pickupId.value = trip.value.routePoints[0].id
-    dropoffId.value = trip.value.routePoints[trip.value.routePoints.length - 1].id
+    if (initial && trip.value?.routePoints?.length) {
+      pickupId.value = trip.value.routePoints[0].id
+      dropoffId.value = trip.value.routePoints[trip.value.routePoints.length - 1].id
+      snapPickupToStop()
+      snapDropoffToStop()
+    }
+    await loadEta()
+    startLiveRefresh()
+  } catch (e: any) {
+    error.value = e?.response?.data?.message ?? 'Unable to load trip'
   } finally {
-    loading.value = false
+    if (initial) loading.value = false
   }
 }
-load()
+load(true)
 
 function nameOfPoint(id: string) {
   return trip.value?.routePoints?.find((x: any) => x.id === id)?.displayAddress ?? 'Point'
 }
+
+function routePoint(id: string) {
+  return trip.value?.routePoints?.find((x: any) => x.id === id)
+}
+
+function snapPickupToStop() {
+  const rp = routePoint(pickupId.value)
+  if (!rp) return
+  pickupPin.value.lat = rp.lat
+  pickupPin.value.lng = rp.lng
+  pickupPin.value.placeName = rp.displayAddress
+  pickupPin.value.placeId = rp.placeId ?? ''
+}
+
+function snapDropoffToStop() {
+  const rp = routePoint(dropoffId.value)
+  if (!rp) return
+  dropoffPin.value.lat = rp.lat
+  dropoffPin.value.lng = rp.lng
+  dropoffPin.value.placeName = rp.displayAddress
+  dropoffPin.value.placeId = rp.placeId ?? ''
+}
+
+watch(pickupId, snapPickupToStop)
+watch(dropoffId, snapDropoffToStop)
 
 function estimateTotal() {
   if (!trip.value) return 0
@@ -172,6 +288,14 @@ async function book() {
       tripId: trip.value.id,
       pickupRoutePointId: pickupId.value,
       dropoffRoutePointId: dropoffId.value,
+      pickupLat: pickupPin.value.lat,
+      pickupLng: pickupPin.value.lng,
+      dropoffLat: dropoffPin.value.lat,
+      dropoffLng: dropoffPin.value.lng,
+      pickupPlaceName: pickupPin.value.placeName || nameOfPoint(pickupId.value),
+      pickupPlaceId: pickupPin.value.placeId || routePoint(pickupId.value)?.placeId || null,
+      dropoffPlaceName: dropoffPin.value.placeName || nameOfPoint(dropoffId.value),
+      dropoffPlaceId: dropoffPin.value.placeId || routePoint(dropoffId.value)?.placeId || null,
       seats: seats.value
     })
     router.push('/bookings')
@@ -181,4 +305,49 @@ async function book() {
     booking.value = false
   }
 }
+
+async function refreshTrip() {
+  try {
+    const resp = await http.get(`/trips/${route.params.id}`)
+    trip.value = trip.value ? { ...trip.value, ...resp.data } : resp.data
+  } catch {
+    // ignore transient errors during polling
+  }
+}
+
+async function loadEta() {
+  etaError.value = ''
+  etaLoading.value = true
+  try {
+    if (!auth.isAuthenticated) {
+      etaResults.value = []
+      return
+    }
+    const resp = await http.get(`/trips/${route.params.id}/eta`)
+    etaResults.value = resp.data?.etas ?? []
+  } catch (e: any) {
+    etaResults.value = []
+    etaError.value = e?.response?.data?.message ?? 'Live ETA unavailable for this trip.'
+  } finally {
+    etaLoading.value = false
+  }
+}
+
+function startLiveRefresh() {
+  if (refreshHandle.value) return
+  refreshHandle.value = window.setInterval(async () => {
+    await refreshTrip()
+    await loadEta()
+  }, 15000)
+}
+
+function formatSeconds(sec: number) {
+  if (!sec && sec !== 0) return 'N/A'
+  const minutes = Math.max(0, Math.round(sec / 60))
+  return minutes < 1 ? '<1 min' : `${minutes} min`
+}
+
+onBeforeUnmount(() => {
+  if (refreshHandle.value) window.clearInterval(refreshHandle.value)
+})
 </script>

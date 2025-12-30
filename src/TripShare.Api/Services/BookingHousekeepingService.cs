@@ -67,20 +67,25 @@ public sealed class BookingHousekeepingService : BackgroundService
         var autoCompleteCutoff = now.AddHours(-6);
         var toComplete = await db.Trips
             .Include(x => x.Bookings)
-            .Where(x => x.Status == TripStatus.Scheduled && x.DepartureTimeUtc <= autoCompleteCutoff)
+            .Where(x => (x.Status == TripStatus.Scheduled || x.Status == TripStatus.EnRoute || x.Status == TripStatus.Arrived) && x.DepartureTimeUtc <= autoCompleteCutoff)
             .Take(50)
             .ToListAsync(ct);
 
         foreach (var t in toComplete)
         {
             t.Status = TripStatus.Completed;
+            t.StatusUpdatedAt = now;
             t.UpdatedAt = now;
+            t.CompletedAtUtc = now;
 
             foreach (var b in t.Bookings.Where(x => x.Status == BookingStatus.Accepted))
             {
                 b.Status = BookingStatus.Completed;
                 b.CompletedAt = now;
                 b.UpdatedAt = now;
+                b.StatusUpdatedAt = now;
+                b.ProgressStatus = BookingProgressStatus.Completed;
+                b.ProgressUpdatedAt = now;
 
                 await notif.CreateAsync(b.PassengerId, NotificationType.TripCompleted, "Trip completed", "Trip has been marked completed. You can now leave a rating.", t.Id, b.Id, ct);
             }

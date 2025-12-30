@@ -28,8 +28,19 @@ public sealed record TripSummaryDto(
     DateTimeOffset DepartureTimeUtc,
     int SeatsTotal,
     string Currency,
+    TripStatus Status,
+    DateTimeOffset UpdatedAtUtc,
+    DateTimeOffset? StartedAtUtc,
+    DateTimeOffset? ArrivedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    DateTimeOffset? CancelledAtUtc,
+    double? CurrentLat,
+    double? CurrentLng,
+    double? CurrentHeading,
+    DateTimeOffset? LocationUpdatedAtUtc,
     IReadOnlyList<RoutePointDto> RoutePoints,
-    IReadOnlyList<SegmentDto> Segments
+    IReadOnlyList<SegmentDto> Segments,
+    string? Notes
 );
 
 public sealed record CreateTripRequest(
@@ -68,5 +79,13 @@ public sealed record SearchTripsRequest(
     int Page = 1,
     int PageSize = 20
 );
+
+public sealed record UpdateTripStatusRequest(string Status, string? Reason);
+
+public sealed record UpdateTripLocationRequest(double Lat, double Lng, double? Heading);
+
+public sealed record EtaResultDto(Guid BookingId, int EtaToPickupSeconds, int EtaToDropoffSeconds, DateTimeOffset CalculatedAtUtc);
+
+public sealed record TripEtaResponse(Guid TripId, IReadOnlyList<EtaResultDto> Etas);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long Total);

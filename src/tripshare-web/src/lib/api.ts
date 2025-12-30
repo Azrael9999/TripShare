@@ -58,6 +58,8 @@ export type TripListItem = {
   instantBook: boolean
   bookingCutoffMinutes: number
   pendingExpiryMinutes: number
+   status?: string
+   statusUpdatedAtUtc?: string
   driver: { id: string; displayName: string; photoUrl?: string; ratingAverage?: number; verified?: boolean }
   routePoints: RoutePoint[]
   segmentPrices: { fromRoutePointId: string; toRoutePointId: string; priceAmount: number; currency: string }[]
@@ -67,12 +69,19 @@ export type Booking = {
   id: string
   tripId: string
   status: 'Pending' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Expired' | 'Completed'
+  progressStatus?: string
   seats: number
+  pickupLat?: number
+  pickupLng?: number
+  dropoffLat?: number
+  dropoffLng?: number
   pickupRoutePointId: string
   dropoffRoutePointId: string
   totalPrice: number
   currency: string
   createdAtUtc: string
+  statusUpdatedAtUtc?: string
+  progressUpdatedAtUtc?: string
 }
 
 export type NotificationItem = {

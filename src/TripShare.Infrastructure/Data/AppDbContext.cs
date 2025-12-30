@@ -44,6 +44,7 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<Trip>(b =>
         {
             b.HasIndex(x => x.DriverId);
+            b.HasIndex(x => new { x.Status, x.UpdatedAt });
             b.Property(x => x.Currency).HasMaxLength(8);
             b.HasMany(x => x.RoutePoints).WithOne(x => x.Trip!).HasForeignKey(x => x.TripId);
             b.HasMany(x => x.Segments).WithOne(x => x.Trip!).HasForeignKey(x => x.TripId);
@@ -66,7 +67,12 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<Booking>(b =>
         {
             b.HasIndex(x => new { x.TripId, x.PassengerId });
+            b.HasIndex(x => new { x.TripId, x.Status, x.ProgressStatus });
             b.Property(x => x.Currency).HasMaxLength(8);
+            b.Property(x => x.PickupPlaceName).HasMaxLength(200);
+            b.Property(x => x.DropoffPlaceName).HasMaxLength(200);
+            b.Property(x => x.PickupPlaceId).HasMaxLength(128);
+            b.Property(x => x.DropoffPlaceId).HasMaxLength(128);
             b.HasMany(x => x.SegmentAllocations).WithOne(x => x.Booking!).HasForeignKey(x => x.BookingId);
         });
 

@@ -2,6 +2,7 @@ type TelemetryOptions = {
   apiBase?: string
   enabled?: boolean
   app?: string
+  apiKey?: string
 }
 
 type TelemetryEvent = {
@@ -26,6 +27,7 @@ const defaultNoopClient: TelemetryClient = {
 export function configureTelemetry(options: TelemetryOptions): TelemetryClient {
   const enabled = options.enabled !== false
   const base = options.apiBase?.replace(/\/$/, '')
+  const apiKey = options.apiKey
 
   if (!enabled || !base) {
     return defaultNoopClient
@@ -47,7 +49,8 @@ export function configureTelemetry(options: TelemetryOptions): TelemetryClient {
     void fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'X-Telemetry-Key': apiKey } : {})
       },
       body
     }).catch(() => {

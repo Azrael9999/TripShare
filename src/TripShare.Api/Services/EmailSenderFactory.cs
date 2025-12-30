@@ -24,6 +24,13 @@ public sealed class EmailSenderFactory : IEmailSender
             return;
         }
 
+        if (mode.Equals("Acs", StringComparison.OrdinalIgnoreCase))
+        {
+            var sender = new AcsEmailSender(_cfg, _log);
+            await sender.SendAsync(toEmail, subject, htmlBody, ct);
+            return;
+        }
+
         var dev = new DevFileEmailSender(_cfg, _log);
         await dev.SendAsync(toEmail, subject, htmlBody, ct);
     }

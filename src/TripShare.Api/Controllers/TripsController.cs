@@ -123,8 +123,8 @@ public sealed class TripsController : ControllerBase
     [HttpGet("{id:guid}/location/stream")]
     public async Task StreamLocation(Guid id, CancellationToken ct)
     {
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers.Add("X-Accel-Buffering", "no");
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
         Response.ContentType = "text/event-stream";
 
         await foreach (var update in _trips.StreamLocationsAsync(User.GetUserId(), id, ct))

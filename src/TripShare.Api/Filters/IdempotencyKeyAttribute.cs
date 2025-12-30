@@ -39,7 +39,7 @@ public sealed class IdempotencyKeyAttribute : Attribute, IAsyncActionFilter
             return;
         }
 
-        if (cache.TryGetValue<IdempotencyCacheEntry>(BuildCacheKey(context, key), out var cached))
+        if (cache.TryGetValue<IdempotencyCacheEntry>(BuildCacheKey(context, key), out var cached) && cached is not null)
         {
             logger.LogInformation("Returning cached response for idempotency key {Key}", key);
             context.Result = ToActionResult(cached);

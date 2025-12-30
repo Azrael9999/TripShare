@@ -130,7 +130,7 @@ public sealed class TripService
     public async Task<PagedResult<TripSummaryDto>> SearchAsync(SearchTripsRequest req, CancellationToken ct)
     {
         var cacheKey = $"search:{req.Query}:{req.FromUtc}:{req.ToUtc}:{req.MaxPricePerSeat}:{req.MinDriverRating}:{req.VerifiedDriversOnly}:{req.Page}:{req.PageSize}";
-        if (_cache.TryGetValue<PagedResult<TripSummaryDto>>(cacheKey, out var cached))
+        if (_cache.TryGetValue<PagedResult<TripSummaryDto>>(cacheKey, out var cached) && cached is not null)
         {
             return cached;
         }
@@ -283,7 +283,15 @@ public sealed class TripService
         trip.UpdatedAt = now;
 
         await _db.SaveChangesAsync(ct);
-        await _locationStream.PublishAsync(trip.Id, new TripLocationUpdateDto(trip.Id, trip.CurrentLat, trip.CurrentLng, trip.CurrentHeading, trip.LocationUpdatedAt!.Value), ct);
+        await _locationStream.PublishAsync(
+            trip.Id,
+            new TripLocationUpdateDto(
+                trip.Id,
+                trip.CurrentLat!.Value,
+                trip.CurrentLng!.Value,
+                trip.CurrentHeading,
+                trip.LocationUpdatedAt!.Value),
+            ct);
     }
 
     public async Task<TripEtaResponse> CalculateEtasAsync(Guid actorId, Guid tripId, CancellationToken ct)

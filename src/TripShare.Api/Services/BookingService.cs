@@ -429,6 +429,8 @@ public sealed class BookingService
 
     private void EnqueueStatusNotifications(Booking booking, BookingStatus newStatus)
     {
+        var trip = booking.Trip ?? throw new InvalidOperationException("Trip not loaded for booking notifications.");
+
         if (newStatus == BookingStatus.Accepted)
         {
             _jobs.Enqueue("booking-accepted", ct => _notif.CreateAsync(
@@ -463,7 +465,7 @@ public sealed class BookingService
                 ct));
 
             _jobs.Enqueue("booking-cancelled-driver", ct => _notif.CreateAsync(
-                booking.Trip.DriverId,
+                trip.DriverId,
                 NotificationType.BookingCancelled,
                 "Booking cancelled",
                 "A booking was cancelled.",
@@ -483,7 +485,7 @@ public sealed class BookingService
                 ct));
 
             _jobs.Enqueue("booking-completed-driver", ct => _notif.CreateAsync(
-                booking.Trip.DriverId,
+                trip.DriverId,
                 NotificationType.TripCompleted,
                 "Trip completed",
                 "A booking was completed. You can receive ratings now.",
@@ -495,6 +497,8 @@ public sealed class BookingService
 
     private void EnqueueProgressNotifications(Booking booking, BookingProgressStatus target)
     {
+        var trip = booking.Trip ?? throw new InvalidOperationException("Trip not loaded for booking progress notifications.");
+
         if (target == BookingProgressStatus.DriverEnRoute)
         {
             _jobs.Enqueue("booking-progress-driver-en-route", ct => _notif.CreateAsync(
@@ -513,7 +517,7 @@ public sealed class BookingService
                 NotificationType.TripUpdated,
                 "Driver arrived",
                 "Your driver is at the pickup.",
-                booking.TripId,
+                trip.Id,
                 booking.Id,
                 ct));
         }

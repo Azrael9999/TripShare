@@ -9,11 +9,11 @@ type MetaDescriptor = {
   robots?: string
 }
 
-const defaultTitle = 'TripShare Sri Lanka | Verified Carpool & Ride Sharing'
+const defaultTitle = 'HopTrip Sri Lanka | Verified Carpool & Ride Sharing'
 const defaultDescription =
   'Find trusted carpools and shared rides across Sri Lanka with verified drivers, live ETAs, and safety sharing.'
 const defaultKeywords =
-  'Sri Lanka carpool, ride sharing Sri Lanka, Colombo carpool, Kandy rides, Galle rides, TripShare, verified drivers, book seats, live ETA'
+  'Sri Lanka carpool, ride sharing Sri Lanka, Colombo carpool, Kandy rides, Galle rides, HopTrip, verified drivers, book seats, live ETA'
 
 function upsertMeta(attr: 'name' | 'property', key: string, value: string | undefined) {
   if (!value) return

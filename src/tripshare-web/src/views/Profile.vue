@@ -33,7 +33,7 @@
 
           <p v-if="!auth.me?.emailVerified" class="text-sm text-slate-600 mt-3">
             Trips can only be created and booked after verification. In development mode, the API writes the email to
-            <span class="font-mono">TripShare.Api/App_Data/dev-emails</span>.
+            <span class="font-mono">App_Data/dev-emails</span>.
           </p>
 
           <p v-if="msg" class="text-sm text-brand-700 mt-3">{{ msg }}</p>

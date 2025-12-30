@@ -105,7 +105,7 @@ public sealed class UsersController : ControllerBase
     {
         var export = await _auth.ExportAccountAsync(User.GetUserId(), ct);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(export);
-        return File(bytes, "application/json", $"tripshare-account-{User.GetUserId()}.json");
+        return File(bytes, "application/json", $"hoptrip-account-{User.GetUserId()}.json");
     }
 
     [Authorize]

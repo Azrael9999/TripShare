@@ -46,7 +46,7 @@ window.addEventListener('unhandledrejection', (event) => {
 upsertLdJson('org', {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  name: 'TripShare Sri Lanka',
+  name: 'HopTrip Sri Lanka',
   url: window.location.origin,
   logo: brandConfig.logoUrl,
   sameAs: [

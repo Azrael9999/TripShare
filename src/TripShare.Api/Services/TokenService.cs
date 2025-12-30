@@ -20,8 +20,8 @@ public sealed class TokenService : ITokenService
     {
         _cfg = cfg;
         var jwt = cfg.GetSection("Jwt");
-        _issuer = jwt["Issuer"] ?? "TripShare";
-        _audience = jwt["Audience"] ?? "TripShare";
+        _issuer = jwt["Issuer"] ?? "HopTrip";
+        _audience = jwt["Audience"] ?? "HopTrip";
         _accessMinutes = int.TryParse(jwt["AccessTokenMinutes"], out var m) ? m : 30;
 
         var signingKey = jwt["SigningKey"] ?? throw new InvalidOperationException("Jwt:SigningKey missing");

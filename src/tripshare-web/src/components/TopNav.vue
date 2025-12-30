@@ -3,11 +3,11 @@
     <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
       <RouterLink to="/" class="flex items-center gap-3">
         <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 shadow-soft flex items-center justify-center overflow-hidden">
-          <img v-if="brandLogo" :src="brandLogo" alt="TripShare logo" class="h-full w-full object-cover" />
-          <span v-else class="text-white font-semibold text-sm">TS</span>
+          <img v-if="brandLogo" :src="brandLogo" alt="HopTrip logo" class="h-full w-full object-cover" />
+          <span v-else class="text-white font-semibold text-sm">HT</span>
         </div>
         <div class="leading-tight">
-          <div class="font-semibold">TripShare</div>
+          <div class="font-semibold">HopTrip</div>
           <div class="text-xs text-slate-500">Carpool, simplified</div>
         </div>
       </RouterLink>

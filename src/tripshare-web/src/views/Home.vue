@@ -221,7 +221,7 @@ search()
 
 onMounted(() => {
   applySeo({
-    title: 'TripShare Sri Lanka | Carpool & Ride Sharing',
+    title: 'HopTrip Sri Lanka | Carpool & Ride Sharing',
     description: 'Book or offer seats with verified drivers across Sri Lanka. Live ETAs, smart routes, and safety sharing for Colombo, Kandy, Galle and more.',
     image: brandConfig.heroImageUrl
   })

@@ -32,7 +32,7 @@ ValidateConfiguration(builder.Configuration, builder.Environment);
 builder.Host.UseSerilog((ctx, lc) =>
 {
     var aiConnectionString = ctx.Configuration["ApplicationInsights:ConnectionString"];
-    var aiRoleName = ctx.Configuration["ApplicationInsights:RoleName"] ?? "TripShare.Api";
+    var aiRoleName = ctx.Configuration["ApplicationInsights:RoleName"] ?? "HopTrip.Api";
 
     lc
         .Enrich.FromLogContext()

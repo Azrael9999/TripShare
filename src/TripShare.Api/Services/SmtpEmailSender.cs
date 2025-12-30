@@ -18,8 +18,8 @@ public sealed class SmtpEmailSender : IEmailSender
 
     public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken ct)
     {
-        var fromName = _cfg["Email:FromName"] ?? "TripShare";
-        var fromEmail = _cfg["Email:FromEmail"] ?? "no-reply@tripshare.lk";
+        var fromName = _cfg["Email:FromName"] ?? "HopTrip";
+        var fromEmail = _cfg["Email:FromEmail"] ?? "no-reply@hoptrip.lk";
 
         var host = _cfg["Email:Smtp:Host"] ?? "";
         var port = int.TryParse(_cfg["Email:Smtp:Port"], out var p) ? p : 587;

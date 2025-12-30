@@ -203,7 +203,7 @@
       <AdSlot name="safety-sidebar" />
       <div class="card p-5">
         <div class="font-semibold">Emergency</div>
-        <p class="text-sm text-slate-600 mt-2">If you're in danger, contact local emergency services immediately. Use TripShare reports afterwards.</p>
+        <p class="text-sm text-slate-600 mt-2">If you're in danger, contact local emergency services immediately. Use HopTrip reports afterwards.</p>
       </div>
     </aside>
   </div>

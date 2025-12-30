@@ -22,6 +22,25 @@
           <RouterLink to="/admin/reports" class="btn-primary">View reports</RouterLink>
         </div>
       </div>
+
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="font-semibold">Driver verification gate</div>
+            <p class="text-sm text-slate-600 mt-1">
+              Require admin-verified drivers before creating trips. Applies platform-wide.
+            </p>
+          </div>
+          <button class="btn-outline" @click="toggleDriverVerification">
+            {{ driverVerificationRequired ? 'Disable' : 'Enable' }}
+          </button>
+        </div>
+        <p class="text-sm text-slate-600 mt-3">
+          Current state: <span class="badge">{{ driverVerificationRequired ? 'Required' : 'Off' }}</span>
+        </p>
+        <p v-if="settingsMsg" class="text-sm text-emerald-700 mt-2">{{ settingsMsg }}</p>
+        <p v-if="settingsErr" class="text-sm text-red-600 mt-2">{{ settingsErr }}</p>
+      </div>
     </section>
 
     <aside class="lg:col-span-4 space-y-6">
@@ -40,6 +59,9 @@ import { http } from '../../lib/api'
 import AdSlot from '../../components/AdSlot.vue'
 
 const metrics = ref<any|null>(null)
+const driverVerificationRequired = ref(false)
+const settingsMsg = ref('')
+const settingsErr = ref('')
 
 const cards = computed(() => {
   const m = metrics.value ?? {}
@@ -52,8 +74,25 @@ const cards = computed(() => {
 })
 
 async function load() {
-  const resp = await http.get('/admin/metrics')
-  metrics.value = resp.data
+  const [metricsResp, settingsResp] = await Promise.all([
+    http.get('/admin/metrics'),
+    http.get('/admin/settings')
+  ])
+  metrics.value = metricsResp.data
+  driverVerificationRequired.value = !!settingsResp.data?.driverVerificationRequired
 }
 load()
+
+async function toggleDriverVerification() {
+  settingsMsg.value = ''
+  settingsErr.value = ''
+  try {
+    const newVal = !driverVerificationRequired.value
+    await http.post('/admin/settings/driver-verification', newVal)
+    driverVerificationRequired.value = newVal
+    settingsMsg.value = `Driver verification requirement ${newVal ? 'enabled' : 'disabled'}.`
+  } catch (e:any) {
+    settingsErr.value = e?.response?.data?.message ?? 'Failed to update setting.'
+  }
+}
 </script>

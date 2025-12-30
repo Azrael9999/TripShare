@@ -38,7 +38,10 @@ public sealed class UsersController : ControllerBase
             user.DisplayName,
             user.PhotoUrl,
             user.IsDriver,
+            user.DriverVerified,
             user.Role,
+            driverVerifiedAt = user.DriverVerifiedAt,
+            driverVerificationNote = user.DriverVerificationNote,
             ratingAverage = avg,
             vehicle = user.Vehicle == null ? null : new { user.Vehicle.Make, user.Vehicle.Model, user.Vehicle.Color, user.Vehicle.PlateNumber, user.Vehicle.Seats }
         });

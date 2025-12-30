@@ -27,6 +27,7 @@ A production-oriented starter for a ride sharing / carpool app.
   - Serilog console + rolling file logs under `TripShare.Api/Logs/`
   - correlation id header: `X-Correlation-Id`
 - SMS OTP via Text.lk (phone-based login / verification)
+- Admin toggle for driver verification gate (require admin-approved drivers before creating trips)
 
 ## Run locally (Visual Studio 2022)
 ### 1) Database
@@ -75,6 +76,7 @@ Frontend runs on:
   - `POST /api/auth/sms/request` `{ phoneNumber }`
   - `POST /api/auth/sms/verify` `{ phoneNumber, otp }`
 - Frontend login modal now supports SMS alongside Google.
+- Driver verification (admin-controlled): enable/disable globally from the Admin dashboard; when enabled, only admin-verified drivers can create trips.
 
 ## Ads (non-invasive)
 The UI includes **placeholder ad slots** in:

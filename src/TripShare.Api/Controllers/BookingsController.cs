@@ -27,6 +27,7 @@ public sealed class BookingsController : ControllerBase
 
     [Authorize]
     [RequireVerifiedEmail]
+    [IdempotencyKey]
     [HttpPost]
     public async Task<ActionResult<BookingDto>> Create([FromBody] CreateBookingRequest req, CancellationToken ct)
         => Ok(await _bookings.CreateAsync(User.GetUserId(), req, ct));

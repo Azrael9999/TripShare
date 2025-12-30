@@ -10,7 +10,7 @@
     </div>
 
     <div class="mt-5">
-      <AdSlot />
+      <AdSlot name="verify-email-sidebar" />
     </div>
   </div>
 </template>

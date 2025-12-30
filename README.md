@@ -23,11 +23,19 @@ A production-oriented starter for a ride sharing / carpool app.
   - concurrency protection via serializable transaction + retry
 - Ratings
   - allow rating only after booking is completed, one rating per user per booking
+- Trust & safety
+  - driver identity verification workflow (admin review + verified badge surfaced in search/trip details)
+  - emergency contact + panic flow with admin alerts
+  - messaging on bookings with blocklist checks
 - Logging
   - Serilog console + rolling file logs under `TripShare.Api/Logs/`
   - correlation id header: `X-Correlation-Id`
 - SMS OTP via Text.lk (phone-based login / verification)
 - Admin toggle for driver verification gate (require admin-approved drivers before creating trips)
+- Ads
+  - configurable ad slots + per-session frequency caps (admin UI), telemetry-backed impressions
+- Reliability
+  - durable background job queue for notifications with retry/backoff
 
 ## Run locally (Visual Studio 2022)
 ### 1) Database
@@ -146,6 +154,9 @@ docker compose up --build
 - Configurable **CORS** via `Cors:AllowedOrigins` (no more `AllowAnyOrigin`).
 - Health endpoint: `GET /health`
 - Logging: Serilog (console + rolling file logs) with correlation ids.
+- Durable notification jobs with retry/backoff stored in SQL (see `BackgroundJobs` table and worker service).
+- Ad slot configuration + frequency capping via `/api/admin/ads/config` and client fetch `/api/ads/config`.
+- Driver identity verification workflow and badges; search supports `verifiedDriversOnly` to surface trusted drivers.
 
 ## Running locally (developer friendly)
 ### Backend

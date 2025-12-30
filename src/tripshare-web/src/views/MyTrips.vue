@@ -144,7 +144,7 @@
         Select a trip to manage.
       </div>
 
-      <AdSlot />
+      <AdSlot name="my-trips-sidebar" />
     </section>
   </div>
 </template>

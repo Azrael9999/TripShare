@@ -126,7 +126,7 @@ public sealed class BookingService
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
 
-                QueueBookingNotifications(trip, booking, passengerId);
+                await QueueBookingNotificationsAsync(trip, booking, passengerId, ct);
 
                 _log.LogInformation(
                     "Booking {BookingId} created for trip {TripId} by {PassengerId}",
@@ -261,7 +261,7 @@ public sealed class BookingService
         }
 
         // Notifications (after DB state is successfully persisted)
-        EnqueueStatusNotifications(booking, newStatus);
+        await EnqueueStatusNotificationsAsync(booking, newStatus, ct);
 
         _log.LogInformation(
             "Booking {BookingId} status changed to {Status} by {ActorId}",
@@ -349,7 +349,7 @@ public sealed class BookingService
 
         await _db.SaveChangesAsync(ct);
 
-        EnqueueProgressNotifications(booking, target);
+        await EnqueueProgressNotificationsAsync(booking, target, ct);
     }
 
     private static BookingDto Map(Booking b)
@@ -383,165 +383,179 @@ public sealed class BookingService
         if (km > MaxPinDistanceKm) throw new InvalidOperationException(message);
     }
 
-    private void QueueBookingNotifications(Trip trip, Booking booking, Guid passengerId)
+    private async Task QueueBookingNotificationsAsync(Trip trip, Booking booking, Guid passengerId, CancellationToken ct)
     {
         if (trip.InstantBook)
         {
-            _jobs.Enqueue("booking-accepted-passenger", ct => _notif.CreateAsync(
-                passengerId,
-                NotificationType.BookingAccepted,
-                "Booking accepted",
-                "Your booking was accepted automatically.",
-                trip.Id,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    passengerId,
+                    NotificationType.BookingAccepted,
+                    "Booking accepted",
+                    "Your booking was accepted automatically.",
+                    trip.Id,
+                    booking.Id),
+                cancellationToken: ct);
 
-            _jobs.Enqueue("booking-accepted-driver", ct => _notif.CreateAsync(
-                trip.DriverId,
-                NotificationType.BookingAccepted,
-                "New booking",
-                "A new booking was accepted automatically.",
-                trip.Id,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    trip.DriverId,
+                    NotificationType.BookingAccepted,
+                    "New booking",
+                    "A new booking was accepted automatically.",
+                    trip.Id,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else
         {
-            _jobs.Enqueue("booking-requested-driver", ct => _notif.CreateAsync(
-                trip.DriverId,
-                NotificationType.BookingRequested,
-                "New booking request",
-                "A passenger requested to join your trip.",
-                trip.Id,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    trip.DriverId,
+                    NotificationType.BookingRequested,
+                    "New booking request",
+                    "A passenger requested to join your trip.",
+                    trip.Id,
+                    booking.Id),
+                cancellationToken: ct);
 
-            _jobs.Enqueue("booking-requested-passenger", ct => _notif.CreateAsync(
-                passengerId,
-                NotificationType.BookingRequested,
-                "Booking requested",
-                "Your booking request was sent to the driver.",
-                trip.Id,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    passengerId,
+                    NotificationType.BookingRequested,
+                    "Booking requested",
+                    "Your booking request was sent to the driver.",
+                    trip.Id,
+                    booking.Id),
+                cancellationToken: ct);
         }
     }
 
-    private void EnqueueStatusNotifications(Booking booking, BookingStatus newStatus)
+    private async Task EnqueueStatusNotificationsAsync(Booking booking, BookingStatus newStatus, CancellationToken ct)
     {
         var trip = booking.Trip ?? throw new InvalidOperationException("Trip not loaded for booking notifications.");
 
         if (newStatus == BookingStatus.Accepted)
         {
-            _jobs.Enqueue("booking-accepted", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.BookingAccepted,
-                "Booking accepted",
-                "Your booking request was accepted by the driver.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.BookingAccepted,
+                    "Booking accepted",
+                    "Your booking request was accepted by the driver.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (newStatus == BookingStatus.Rejected)
         {
-            _jobs.Enqueue("booking-rejected", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.BookingRejected,
-                "Booking rejected",
-                "Your booking request was rejected by the driver.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.BookingRejected,
+                    "Booking rejected",
+                    "Your booking request was rejected by the driver.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (newStatus == BookingStatus.Cancelled)
         {
-            _jobs.Enqueue("booking-cancelled-passenger", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.BookingCancelled,
-                "Booking cancelled",
-                "Booking was cancelled.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.BookingCancelled,
+                    "Booking cancelled",
+                    "Booking was cancelled.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
 
-            _jobs.Enqueue("booking-cancelled-driver", ct => _notif.CreateAsync(
-                trip.DriverId,
-                NotificationType.BookingCancelled,
-                "Booking cancelled",
-                "A booking was cancelled.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    trip.DriverId,
+                    NotificationType.BookingCancelled,
+                    "Booking cancelled",
+                    "A booking was cancelled.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (newStatus == BookingStatus.Completed)
         {
-            _jobs.Enqueue("booking-completed-passenger", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.TripCompleted,
-                "Trip completed",
-                "Trip completed. You can leave a rating now.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.TripCompleted,
+                    "Trip completed",
+                    "Trip completed. You can leave a rating now.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
 
-            _jobs.Enqueue("booking-completed-driver", ct => _notif.CreateAsync(
-                trip.DriverId,
-                NotificationType.TripCompleted,
-                "Trip completed",
-                "A booking was completed. You can receive ratings now.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    trip.DriverId,
+                    NotificationType.TripCompleted,
+                    "Trip completed",
+                    "A booking was completed. You can receive ratings now.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
     }
 
-    private void EnqueueProgressNotifications(Booking booking, BookingProgressStatus target)
+    private async Task EnqueueProgressNotificationsAsync(Booking booking, BookingProgressStatus target, CancellationToken ct)
     {
         var trip = booking.Trip ?? throw new InvalidOperationException("Trip not loaded for booking progress notifications.");
 
         if (target == BookingProgressStatus.DriverEnRoute)
         {
-            _jobs.Enqueue("booking-progress-driver-en-route", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.TripUpdated,
-                "Driver en route",
-                "Your driver is on the way.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.TripUpdated,
+                    "Driver en route",
+                    "Your driver is on the way.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (target == BookingProgressStatus.DriverArrived)
         {
-            _jobs.Enqueue("booking-progress-driver-arrived", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.TripUpdated,
-                "Driver arrived",
-                "Your driver is at the pickup.",
-                trip.Id,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.TripUpdated,
+                    "Driver arrived",
+                    "Your driver is at the pickup.",
+                    trip.Id,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (target == BookingProgressStatus.Riding)
         {
-            _jobs.Enqueue("booking-progress-riding", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.TripStarted,
-                "Trip started",
-                "Enjoy your ride!",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.TripStarted,
+                    "Trip started",
+                    "Enjoy your ride!",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
         else if (target == BookingProgressStatus.Completed)
         {
-            _jobs.Enqueue("booking-progress-completed", ct => _notif.CreateAsync(
-                booking.PassengerId,
-                NotificationType.TripCompleted,
-                "Trip completed",
-                "Trip completed. You can rate your driver.",
-                booking.TripId,
-                booking.Id,
-                ct));
+            await _jobs.EnqueueNotificationAsync(
+                new NotificationWork(
+                    booking.PassengerId,
+                    NotificationType.TripCompleted,
+                    "Trip completed",
+                    "Trip completed. You can rate your driver.",
+                    booking.TripId,
+                    booking.Id),
+                cancellationToken: ct);
         }
     }
 

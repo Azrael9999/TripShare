@@ -11,6 +11,8 @@ import Safety from '../views/Safety.vue'
 import MyTrips from '../views/MyTrips.vue'
 import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import AdminReports from '../views/admin/AdminReports.vue'
+import AdminIdentity from '../views/admin/AdminIdentity.vue'
+import AdminAds from '../views/admin/AdminAds.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -27,7 +29,9 @@ const router = createRouter({
     { path: '/safety', component: Safety, meta: { requiresAuth: true } },
     { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true } },
     { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true } },
-    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true } }
+    { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true } },
+    { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true } },
+    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true } }
   ]
 })
 

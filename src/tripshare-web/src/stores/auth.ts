@@ -9,6 +9,8 @@ export type Me = {
   photoUrl?: string
   isDriver: boolean
   driverVerified: boolean
+  identityVerified: boolean
+  phoneVerified?: boolean
   role: Role
   ratingAverage?: number
   verified?: boolean
@@ -41,7 +43,9 @@ export const useAuthStore = defineStore('auth', {
       return {
         ...raw,
         role,
-        driverVerified: !!raw?.driverVerified
+        driverVerified: !!raw?.driverVerified,
+        identityVerified: !!raw?.identityVerified,
+        phoneVerified: !!raw?.phoneVerified
       }
     },
 

@@ -41,9 +41,11 @@ A production-oriented starter for a ride sharing / carpool app.
 ### 1) Database
 Install SQL Server (LocalDB or full SQL Server).
 
-Set the connection string in `src/TripShare.Api/appsettings.Development.json` (key: `ConnectionStrings:DefaultConnection`):
+Set the connection string in `src/TripShare.Api/appsettings.Development.json` (key: `ConnectionStrings:DefaultConnection`), or via environment variables / User Secrets:
 
 `Server=localhost;Database=TripShareDb;Trusted_Connection=True;TrustServerCertificate=True;`
+
+Tip: you can also drop a `.env.local` (or `.env`) file in the repo root for local runs; keys like `ConnectionStrings__DefaultConnection` and `Jwt__SigningKey` will be picked up automatically before `appsettings.json`.
 
 Or use SQL auth as needed.
 
@@ -68,6 +70,38 @@ npm run dev
 ```
 Frontend runs on:
 - `http://localhost:5173`
+
+### Local env & secrets
+- Use User Secrets or `.env.local` to set:
+  - `ConnectionStrings__DefaultConnection`
+  - `Jwt__SigningKey`
+  - `Cors__AllowedOrigins__0=http://localhost:5173`
+  - `Sms__Provider` (`TextLk` or `Acs`), `Sms__TextLk:*` or `Sms__Acs:*`
+  - `Email__Mode` (`DevFile`, `Smtp`, or `Acs`)
+  - `BackgroundJobs__Provider` (`StorageQueue` recommended; uses Azurite if `UseDevelopmentStorage=true`)
+  - `ApplicationInsights__ConnectionString` (optional)
+  - `Telemetry__ApiKey` (optional; if set, the web client should set `VITE_TELEMETRY_KEY`)
+
+### Azure deployment (minimal path)
+1) Provision infra with `azure-deploy.bicep` (SQL, Storage Queue, Redis, App Service, App Insights, Communication Services). Example:
+```
+az group create -n tripshare-rg -l eastus
+az deployment group create -g tripshare-rg -f azure-deploy.bicep \
+  -p sqlAdminLogin=tripshareadmin sqlAdminPassword=<StrongPassword> \
+  storageName=<uniqueStorage> redisName=<uniqueRedis> communicationName=<uniqueComms>
+```
+2) Build/push API container: `docker build -t <registry>/tripshare-api:latest -f src/TripShare.Api/Dockerfile .` then push.
+3) Set App Service config (if not using Bicep defaults):
+   - `ConnectionStrings__DefaultConnection`
+   - `Jwt__SigningKey`
+   - `Cors__AllowedOrigins__0=https://<your-web>`
+   - `BackgroundJobs__Provider=StorageQueue`
+   - `BackgroundJobs__StorageQueue__ConnectionString=<storage-conn>`
+   - `Cache__RedisConnection=<redis-conn>`
+   - `ApplicationInsights__ConnectionString=<ai>`
+   - `Email__Mode=Acs` + `Email__Acs__ConnectionString` + `Email__Acs__FromEmail`
+   - `Sms__Provider=Acs` + `Sms__Acs__ConnectionString` + `Sms__Acs__Sender`
+4) Frontend: build and host `src/tripshare-web/dist` via Static Web Apps/App Service/Front Door with `VITE_API_BASE` pointing to the API. Align CORS with the web host.
 
 ## Email verification gate
 - After signing in, the API sends a verification email.

@@ -12,13 +12,21 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Enrichers.CorrelationId;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
+using StackExchange.Redis;
 using TripShare.Api.Middleware;
 using TripShare.Api.HealthChecks;
 using TripShare.Api.Services;
 using TripShare.Application.Abstractions;
 using TripShare.Infrastructure.Data;
 
+LoadEnvFiles();
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration
+    .AddJsonFile("appsettings.Local.json", optional: true)
+    .AddUserSecrets<Program>(optional: true);
+
+ValidateConfiguration(builder.Configuration, builder.Environment);
 
 // Serilog
 builder.Host.UseSerilog((ctx, lc) =>
@@ -31,8 +39,12 @@ builder.Host.UseSerilog((ctx, lc) =>
         .Enrich.WithCorrelationId()
         .Enrich.WithProperty("service", aiRoleName)
         .WriteTo.Console()
-        .WriteTo.File("Logs/tripshare-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
         .ReadFrom.Configuration(ctx.Configuration);
+
+    if (ctx.HostingEnvironment.IsDevelopment())
+    {
+        lc.WriteTo.File("Logs/tripshare-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14);
+    }
 
     if (!string.IsNullOrWhiteSpace(aiConnectionString))
     {
@@ -55,7 +67,13 @@ builder.Services.AddCors(options =>
     options.AddPolicy("Default", policy =>
     {
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-        if (builder.Environment.IsDevelopment() || origins.Length == 0)
+
+        if (!builder.Environment.IsDevelopment() && origins.Length == 0)
+        {
+            throw new InvalidOperationException("Cors:AllowedOrigins must be configured in non-development environments.");
+        }
+
+        if (origins.Length == 0)
         {
             // Dev-friendly default: Vue dev server + Swagger UI usage
             policy
@@ -83,6 +101,7 @@ builder.Services.AddApplicationInsightsTelemetry(opt =>
     {
         opt.ConnectionString = connectionString;
     }
+    opt.EnableAdaptiveSampling = true;
 });
 
 builder.Services.AddHealthChecks()
@@ -153,7 +172,10 @@ builder.Services.AddRateLimiter(opt =>
 // EF Core
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sql =>
+    {
+        sql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
+    });
 });
 
 // Auth
@@ -180,7 +202,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
 builder.Services.AddScoped<IEmailSender, EmailSenderFactory>();
-builder.Services.AddScoped<ISmsSender, TextLkSmsSender>();
+builder.Services.AddSingleton<AcsSmsSender>();
+builder.Services.AddSingleton<TextLkSmsSender>();
+builder.Services.AddScoped<ISmsSender, SmsSenderRouter>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TripService>();
 builder.Services.AddScoped<BookingService>();
@@ -198,6 +222,32 @@ builder.Services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
 builder.Services.AddScoped<BackgroundJobProcessor>();
 builder.Services.AddHostedService<BackgroundJobHostedService>();
 builder.Services.AddSingleton<TripLocationStreamService>();
+
+// Distributed cache (Redis if configured, else memory)
+var redisConnection = builder.Configuration["Cache:RedisConnection"];
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    builder.Services.AddStackExchangeRedisCache(opt => opt.Configuration = redisConnection);
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
+// Background jobs provider
+var jobsProvider = builder.Configuration["BackgroundJobs:Provider"] ?? "StorageQueue";
+if (jobsProvider.Equals("StorageQueue", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<StorageQueueBackgroundJobQueue>();
+    builder.Services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<StorageQueueBackgroundJobQueue>());
+    builder.Services.AddHostedService<StorageQueueBackgroundJobProcessor>();
+}
+else
+{
+    builder.Services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
+    builder.Services.AddScoped<BackgroundJobProcessor>();
+    builder.Services.AddHostedService<BackgroundJobHostedService>();
+}
 
 var app = builder.Build();
 
@@ -267,5 +317,59 @@ static async Task EnsureDatabaseReadyAsync(WebApplication app)
         }
 
         throw;
+    }
+}
+
+static void LoadEnvFiles()
+{
+    foreach (var path in new[] { ".env", ".env.local" })
+    {
+        if (!File.Exists(path)) continue;
+
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#"))
+            {
+                continue;
+            }
+
+            var separatorIndex = line.IndexOf('=');
+            if (separatorIndex <= 0) continue;
+
+            var key = line[..separatorIndex].Trim();
+            var value = line[(separatorIndex + 1)..].Trim();
+
+            if (string.IsNullOrEmpty(key)) continue;
+
+            Environment.SetEnvironmentVariable(key, value);
+        }
+    }
+}
+
+static void ValidateConfiguration(IConfiguration cfg, IHostEnvironment env)
+{
+    var errors = new List<string>();
+
+    var connectionString = cfg.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        errors.Add("ConnectionStrings:DefaultConnection is required.");
+    }
+
+    var signingKey = cfg["Jwt:SigningKey"];
+    if (string.IsNullOrWhiteSpace(signingKey) || signingKey.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+    {
+        errors.Add("Jwt:SigningKey must be configured and not use the placeholder value.");
+    }
+
+    var allowedOrigins = cfg.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+    if (!env.IsDevelopment() && allowedOrigins.Length == 0)
+    {
+        errors.Add("Cors:AllowedOrigins must be set in non-development environments.");
+    }
+
+    if (errors.Count > 0)
+    {
+        throw new InvalidOperationException($"Configuration validation failed: {string.Join("; ", errors)}");
     }
 }

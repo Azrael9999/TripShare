@@ -1,4 +1,3 @@
-using Azure;
 using Azure.Communication.Sms;
 using TripShare.Application.Abstractions;
 
@@ -32,7 +31,7 @@ public sealed class AcsSmsSender : ISmsSender
             throw new InvalidOperationException("Sms:Acs:Sender missing");
         }
 
-        var response = await _client.SendAsync(WaitUntil.Completed, from: sender, to: phoneNumber, message: message, cancellationToken: ct);
+        var response = await _client.SendAsync(sender, phoneNumber, message, ct);
         if (!response.Value.Successful)
         {
             _log.LogError("ACS SMS send failed. Status: {Status} Error: {Message}", response.Value.HttpStatusCode, response.Value.ErrorMessage);

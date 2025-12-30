@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Communication.Email;
 using TripShare.Application.Abstractions;
 

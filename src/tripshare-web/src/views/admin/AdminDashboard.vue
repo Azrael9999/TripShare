@@ -74,6 +74,46 @@
         </div>
       </div>
 
+      <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-2">
+          <div class="font-semibold">Driver verification</div>
+          <input v-model="verifyUserId" class="input" placeholder="User GUID" />
+          <textarea v-model="verifyNote" class="textarea" rows="2" placeholder="Optional note"></textarea>
+          <div class="flex gap-2">
+            <button class="btn-outline" :disabled="!isGuid(verifyUserId)" @click="verifyDriver(true)">Mark verified</button>
+            <button class="btn-ghost" :disabled="!isGuid(verifyUserId)" @click="verifyDriver(false)">Unverify</button>
+          </div>
+          <p v-if="verifyMsg" class="text-sm text-emerald-700">{{ verifyMsg }}</p>
+          <p v-if="verifyErr" class="text-sm text-red-600">{{ verifyErr }}</p>
+        </div>
+        <div>
+          <div class="font-semibold mb-2 flex items-center justify-between">
+            <span>Safety incidents</span>
+            <button class="btn-ghost text-xs" @click="loadIncidents" :disabled="incidentsLoading">Refresh</button>
+          </div>
+          <div v-if="incidentsLoading" class="text-slate-600">Loading…</div>
+          <div v-else-if="incidents.length===0" class="text-slate-600">No incidents.</div>
+          <div v-else class="space-y-2 max-h-64 overflow-y-auto">
+            <div v-for="inc in incidents" :key="inc.id" class="rounded-xl border border-slate-100 p-3 bg-white">
+              <div class="flex items-center justify-between">
+                <div class="flex flex-wrap gap-2 items-center">
+                  <span class="badge">{{ inc.status }}</span>
+                  <span class="chip">{{ inc.type }}</span>
+                  <span class="text-xs text-slate-500">{{ inc.createdAt }}</span>
+                </div>
+                <div class="flex gap-1">
+                  <button class="btn-outline text-xs" @click="resolveIncident(inc.id, 'Resolved')">Resolve</button>
+                  <button class="btn-ghost text-xs" @click="resolveIncident(inc.id, 'Escalated')">Escalate</button>
+                </div>
+              </div>
+              <div class="text-sm text-slate-700 mt-1">{{ inc.summary }}</div>
+              <div class="text-xs text-slate-500 mt-1">Trip: {{ inc.tripId || '-' }} · Booking: {{ inc.bookingId || '-' }}</div>
+            </div>
+          </div>
+          <p v-if="incidentsErr" class="text-sm text-red-600 mt-2">{{ incidentsErr }}</p>
+        </div>
+      </div>
+
       <p v-if="adminMsg" class="text-sm text-emerald-700">{{ adminMsg }}</p>
       <p v-if="adminErr" class="text-sm text-red-600">{{ adminErr }}</p>
     </section>
@@ -101,6 +141,13 @@ const adminMsg = ref('')
 const adminErr = ref('')
 const suspendUserId = ref('')
 const hideTripId = ref('')
+const verifyUserId = ref('')
+const verifyNote = ref('')
+const verifyMsg = ref('')
+const verifyErr = ref('')
+const incidents = ref<any[]>([])
+const incidentsLoading = ref(false)
+const incidentsErr = ref('')
 
 const cards = computed(() => {
   const m = metrics.value ?? {}
@@ -119,6 +166,7 @@ async function load() {
   ])
   metrics.value = metricsResp.data
   driverVerificationRequired.value = !!settingsResp.data?.driverVerificationRequired
+  await loadIncidents()
 }
 load()
 
@@ -164,6 +212,47 @@ async function hide(hideTrip:boolean) {
     hideTripId.value = ''
   } catch (e:any) {
     adminErr.value = e?.response?.data?.message ?? 'Failed to update trip.'
+  }
+}
+
+async function verifyDriver(verified:boolean) {
+  verifyMsg.value = ''
+  verifyErr.value = ''
+  if (!isGuid(verifyUserId.value)) {
+    verifyErr.value = 'Enter a valid user ID (GUID).'
+    return
+  }
+  try {
+    await http.post(`/admin/users/${verifyUserId.value}/driver-verify`, { verified, note: verifyNote.value || null })
+    verifyMsg.value = verified ? 'Driver verified.' : 'Driver marked unverified.'
+    verifyUserId.value = ''
+    verifyNote.value = ''
+  } catch (e:any) {
+    verifyErr.value = e?.response?.data?.message ?? 'Failed to update driver verification.'
+  }
+}
+
+async function loadIncidents() {
+  incidentsLoading.value = true
+  incidentsErr.value = ''
+  try {
+    const resp = await http.get('/admin/safety-incidents', { params: { status: null, take: 50 } })
+    incidents.value = resp.data ?? []
+  } catch (e:any) {
+    incidentsErr.value = e?.response?.data?.message ?? 'Failed to load incidents.'
+  } finally {
+    incidentsLoading.value = false
+  }
+}
+
+async function resolveIncident(id:string, status:string) {
+  incidentsErr.value = ''
+  try {
+    const note = prompt('Resolution note (optional):') ?? null
+    await http.post(`/admin/safety-incidents/${id}/resolve`, { status, note })
+    await loadIncidents()
+  } catch (e:any) {
+    incidentsErr.value = e?.response?.data?.message ?? 'Failed to resolve incident.'
   }
 }
 

@@ -17,6 +17,39 @@
         <div class="mt-5 rounded-2xl border border-slate-100 p-5 bg-slate-50">
           <div class="flex items-center justify-between">
             <div>
+              <div class="font-semibold">Profile details</div>
+              <div class="text-sm text-slate-600 mt-1">Update your public profile and phone number.</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <div>
+              <label class="text-xs text-slate-600">Display name</label>
+              <input v-model="profileForm.displayName" class="input mt-1" placeholder="Your name" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-600">Photo URL</label>
+              <input v-model="profileForm.photoUrl" class="input mt-1" placeholder="https://..." />
+            </div>
+            <div>
+              <label class="text-xs text-slate-600">Phone number</label>
+              <input v-model="profileForm.phoneNumber" class="input mt-1" placeholder="Optional" />
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center gap-3">
+            <button class="btn-primary" :disabled="profileSaving" @click="updateProfile">
+              <span v-if="profileSaving">Saving…</span>
+              <span v-else>Save changes</span>
+            </button>
+            <p v-if="profileMsg" class="text-sm text-emerald-700">{{ profileMsg }}</p>
+            <p v-if="profileErr" class="text-sm text-red-600">{{ profileErr }}</p>
+          </div>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-slate-100 p-5 bg-slate-50">
+          <div class="flex items-center justify-between">
+            <div>
               <div class="font-semibold">Email verification</div>
               <div class="text-sm text-slate-600 mt-1">
                 Status:
@@ -91,6 +124,26 @@
           <p v-if="idvMsg" class="text-sm text-emerald-700 mt-3">{{ idvMsg }}</p>
           <p v-if="idvErr" class="text-sm text-red-600 mt-3">{{ idvErr }}</p>
         </div>
+
+        <div class="mt-5 rounded-2xl border border-slate-100 p-5 bg-slate-50">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold">Account data</div>
+              <div class="text-sm text-slate-600 mt-1">Export or delete your account.</div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-3">
+            <button class="btn-outline" :disabled="exporting" @click="exportData">
+              <span v-if="exporting">Preparing…</span>
+              <span v-else>Export data (JSON)</span>
+            </button>
+            <button class="btn-ghost text-red-700" :disabled="deleting" @click="deleteAccount">
+              <span v-if="deleting">Deleting…</span>
+              <span v-else>Delete account</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -126,6 +179,12 @@ const idvForm = ref({
   kycProvider: '',
   kycReference: ''
 })
+const profileForm = ref({ displayName: '', photoUrl: '', phoneNumber: '' })
+const profileSaving = ref(false)
+const profileMsg = ref('')
+const profileErr = ref('')
+const exporting = ref(false)
+const deleting = ref(false)
 
 async function resend() {
   sending.value = true
@@ -141,6 +200,32 @@ async function resend() {
 function logout() {
   auth.logout()
   router.push('/')
+}
+
+function syncProfileForm() {
+  profileForm.value.displayName = auth.me?.displayName ?? ''
+  profileForm.value.photoUrl = auth.me?.photoUrl ?? ''
+  profileForm.value.phoneNumber = auth.me?.phoneNumber ?? ''
+}
+
+async function updateProfile() {
+  profileSaving.value = true
+  profileMsg.value = ''
+  profileErr.value = ''
+  try {
+    await http.put('/users/me/profile', {
+      displayName: profileForm.value.displayName.trim() || auth.me?.email || 'User',
+      photoUrl: profileForm.value.photoUrl?.trim() || null,
+      phoneNumber: profileForm.value.phoneNumber?.trim() || null
+    })
+    await auth.loadMe()
+    syncProfileForm()
+    profileMsg.value = 'Profile updated.'
+  } catch (e: any) {
+    profileErr.value = e?.response?.data?.message ?? 'Failed to update profile.'
+  } finally {
+    profileSaving.value = false
+  }
 }
 
 async function loadIdv() {
@@ -165,6 +250,36 @@ async function loadIdv() {
   }
 }
 
+async function exportData() {
+  exporting.value = true
+  try {
+    const resp = await http.get('/users/me/export', { responseType: 'blob' })
+    const blob = resp.data as Blob
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hoptrip-account-${auth.me?.id ?? 'export'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function deleteAccount() {
+  if (!confirm('This will permanently delete your account and data. Continue?')) return
+  deleting.value = true
+  try {
+    await http.delete('/users/me')
+    auth.logout()
+    router.push('/')
+  } catch (e: any) {
+    alert(e?.response?.data?.message ?? 'Failed to delete account.')
+  } finally {
+    deleting.value = false
+  }
+}
+
 async function submitIdv() {
   idvSubmitting.value = true
   idvMsg.value = ''
@@ -182,6 +297,7 @@ async function submitIdv() {
 }
 
 onMounted(() => {
+  syncProfileForm()
   void loadIdv()
 })
 </script>

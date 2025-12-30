@@ -41,6 +41,7 @@ public sealed class UsersController : ControllerBase
             user.Id,
             user.Email,
             user.EmailVerified,
+            user.PhoneNumber,
             user.DisplayName,
             user.PhotoUrl,
             user.IsDriver,

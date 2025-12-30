@@ -266,6 +266,7 @@ const etaResults = ref<any[]>([])
 const etaError = ref('')
 const etaLoading = ref(false)
 const refreshHandle = ref<number | undefined>()
+const streamAbort = ref<AbortController | null>(null)
 const mapBgStyle = computed(() => {
   const url = hasImage(brandConfig.mapOverlayUrl) ? `url('${brandConfig.mapOverlayUrl}')` : ''
   return url
@@ -293,6 +294,7 @@ async function load(initial = false) {
     }
     await loadEta()
     startLiveRefresh()
+    startLiveStream()
   } catch (e: any) {
     error.value = e?.response?.data?.message ?? 'Unable to load trip'
   } finally {
@@ -402,6 +404,57 @@ function startLiveRefresh() {
   }, 15000)
 }
 
+async function startLiveStream() {
+  if (!route.params.id || typeof route.params.id !== 'string') return
+  if (!auth.accessToken) return
+  if (streamAbort.value) return
+  const controller = new AbortController()
+  streamAbort.value = controller
+  try {
+    const resp = await fetch(`${http.defaults.baseURL}/trips/${route.params.id}/location/stream`, {
+      headers: { Authorization: `Bearer ${auth.accessToken}` },
+      signal: controller.signal
+    })
+    const reader = resp.body?.getReader()
+    if (!reader) return
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let idx
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const chunk = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        const lines = chunk.split('\n')
+        const event = lines.find((l) => l.startsWith('event:'))?.split(':')[1]?.trim()
+        const dataLine = lines.find((l) => l.startsWith('data:')) ?? ''
+        const json = dataLine.replace(/^data:\s*/, '')
+        if (event === 'location' && json) {
+          try {
+            const data = JSON.parse(json)
+            trip.value = {
+              ...(trip.value ?? {}),
+              currentLat: data.lat ?? data.Lat,
+              currentLng: data.lng ?? data.Lng,
+              currentHeading: data.heading ?? data.Heading,
+              locationUpdatedAtUtc: data.timestamp ?? data.Timestamp ?? new Date().toISOString()
+            }
+          } catch {
+            // ignore malformed events
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore stream failures; polling still runs
+  } finally {
+    controller.abort()
+    streamAbort.value = null
+  }
+}
+
 function formatSeconds(sec: number) {
   if (!sec && sec !== 0) return 'N/A'
   const minutes = Math.max(0, Math.round(sec / 60))
@@ -447,6 +500,7 @@ async function copyShareLink() {
 
 onBeforeUnmount(() => {
   if (refreshHandle.value) window.clearInterval(refreshHandle.value)
+  if (streamAbort.value) streamAbort.value.abort()
 })
 
 onMounted(() => {

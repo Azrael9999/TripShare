@@ -2,6 +2,7 @@ using System.Text.Json;
 using Azure;
 using Azure.Storage.Queues;
 using Azure.Storage.Queues.Models;
+using Microsoft.Extensions.DependencyInjection;
 using TripShare.Application.Abstractions;
 using TripShare.Domain.Entities;
 
@@ -69,13 +70,13 @@ internal sealed class StorageQueueBackgroundJobQueue : IBackgroundJobQueue
 internal sealed class StorageQueueBackgroundJobProcessor : BackgroundService
 {
     private readonly StorageQueueBackgroundJobQueue _queueProvider;
-    private readonly NotificationService _notifications;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<StorageQueueBackgroundJobProcessor> _logger;
 
-    public StorageQueueBackgroundJobProcessor(StorageQueueBackgroundJobQueue queueProvider, NotificationService notifications, ILogger<StorageQueueBackgroundJobProcessor> logger)
+    public StorageQueueBackgroundJobProcessor(StorageQueueBackgroundJobQueue queueProvider, IServiceScopeFactory scopeFactory, ILogger<StorageQueueBackgroundJobProcessor> logger)
     {
         _queueProvider = queueProvider;
-        _notifications = notifications;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -134,7 +135,10 @@ internal sealed class StorageQueueBackgroundJobProcessor : BackgroundService
                 var payload = JsonSerializer.Deserialize<NotificationWork>(envelope.Payload);
                 if (payload is null) throw new InvalidOperationException("Missing payload");
 
-                await _notifications.CreateAsync(payload.UserId, payload.Type, payload.Title, payload.Body, payload.TripId, payload.BookingId, ct);
+                using var scope = _scopeFactory.CreateScope();
+                var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
+
+                await notifications.CreateAsync(payload.UserId, payload.Type, payload.Title, payload.Body, payload.TripId, payload.BookingId, ct);
             }
 
             await _queueProvider.Queue.DeleteMessageAsync(message.MessageId, message.PopReceipt, ct);

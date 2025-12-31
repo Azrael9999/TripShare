@@ -5,3 +5,4 @@
 **/dist/
 **/App_Data/dev-emails/
 .env
+/src/TripShare.Api/appsettings.Development.json

@@ -1,0 +1,50 @@
+TripShare backend - Visual Studio run guide
+
+Audience: developers running the ASP.NET Core backend locally in Visual Studio 2022.
+Scope: backend only (TripShare.Api). Frontend is separate.
+
+Prerequisites
+1) Visual Studio 2022 (17.12 Preview or later) with the ".NET desktop & web development" workload so .NET SDK 10.0.101 (per global.json) is installed.
+2) SQL Server available locally. Options:
+   - LocalDB (installed with VS) for quick local runs, or
+   - SQL Server Developer/Express, or
+   - Docker: `docker compose up sql` from the repo root to start the SQL container defined in docker-compose.yml.
+3) If using Docker SQL, ensure port 1433 is free and Docker Desktop is running.
+
+Repository setup
+1) Clone the repo and open TripShare.sln in Visual Studio.
+2) When prompted, let Visual Studio restore NuGet packages. (You can also run `dotnet restore` in the repo root if desired.)
+3) Confirm the SDK version matches global.json (10.0.101). Visual Studio will prompt to install if missing.
+
+Configure app settings
+1) Connection string (required): set `ConnectionStrings:DefaultConnection`.
+   - Easiest: use LocalDB with Windows auth:
+     `Server=(localdb)\\MSSQLLocalDB;Database=TripShareDb;Trusted_Connection=True;TrustServerCertificate=True;`
+   - SQL Server/Docker example (default in appsettings.Development.json):
+     `Server=localhost,1433;Database=TripShareDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;`
+   - Recommended to store secrets via User Secrets:
+     Project: TripShare.Api -> Manage User Secrets -> add:
+     {
+       "ConnectionStrings:DefaultConnection": "<your-connection-string>",
+       "Jwt:SigningKey": "<long-random-secret>"
+     }
+   - You can also drop a .env.local in the repo root with `ConnectionStrings__DefaultConnection` and `Jwt__SigningKey`; the app reads it before appsettings.json.
+2) Optional env flags (commonly used):
+   - `Cors__AllowedOrigins__0=http://localhost:5173` (frontend dev origin)
+   - `Email__Mode=DevFile` (already default) keeps verification emails as files.
+
+Start the backend in Visual Studio
+1) In Solution Explorer, right-click TripShare.Api and select "Set as Startup Project".
+2) Ensure the profile "TripShare.Api" is selected (launchSettings.json sets ASPNETCORE_ENVIRONMENT=Development and `applicationUrl` to http://localhost:8080).
+3) If using Docker SQL, make sure the container is running (`docker compose up sql`).
+4) Press F5 (Debug) or Ctrl+F5 (Run). Visual Studio will build and launch the API on http://localhost:8080.
+5) On first run, with Database:AutoCreate=true (default for Development), the app will create the database and required login/user if they do not exist.
+6) Swagger should open automatically at http://localhost:8080/swagger. Use it to verify endpoints (health endpoint is /health).
+
+Email verification files (for testing)
+- With `Email:Mode=DevFile`, verification emails are written to `TripShare.Api/bin/Debug/net10.0/App_Data/dev-emails/` (or the publish output). Open the latest HTML file to click the verification link.
+
+Common troubleshooting
+- Port conflicts: if 8080 is in use, update `applicationUrl` in `src/TripShare.Api/Properties/launchSettings.json` and matching CORS/frontend env vars.
+- SQL connectivity: ensure the connection string uses `TrustServerCertificate=True` or proper certificates; confirm SQL Server accepts TCP on 1433 (or the configured port).
+- Missing SDK: install .NET 10 preview via the Visual Studio Installer if prompted.

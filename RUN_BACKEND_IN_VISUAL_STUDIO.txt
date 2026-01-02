@@ -18,10 +18,11 @@ Repository setup
 
 Configure app settings
 1) Connection string (required): set `ConnectionStrings:DefaultConnection`.
-   - Easiest: use LocalDB with Windows auth:
+   - Windows auth (no `sa` account needed): LocalDB or a full SQL instance using your Windows login:
      `Server=(localdb)\\MSSQLLocalDB;Database=TripShareDb;Trusted_Connection=True;TrustServerCertificate=True;`
-   - SQL Server/Docker example (default in appsettings.Development.json):
-     `Server=localhost,1433;Database=TripShareDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;`
+     or `Server=localhost;Database=TripShareDb;Trusted_Connection=True;TrustServerCertificate=True;`
+   - SQL auth example (if you later enable `sa` or another SQL login):
+     `Server=localhost,1433;Database=TripShareDb;User Id=sa;Password=<YourStrongPassword>;TrustServerCertificate=True;`
    - Recommended to store secrets via User Secrets:
      Project: TripShare.Api -> Manage User Secrets -> add:
      {
@@ -38,7 +39,7 @@ Start the backend in Visual Studio
 2) Ensure the profile "TripShare.Api" is selected (launchSettings.json sets ASPNETCORE_ENVIRONMENT=Development and `applicationUrl` to http://localhost:8080).
 3) If using Docker SQL, make sure the container is running (`docker compose up sql`).
 4) Press F5 (Debug) or Ctrl+F5 (Run). Visual Studio will build and launch the API on http://localhost:8080.
-5) On first run, with Database:AutoCreate=true (default for Development), the app will create the database and required login/user if they do not exist.
+5) On first run, with Database:AutoCreate=true (default for Development), the app will create the database. If you connect with SQL auth (non-`sa`), it also creates that login/user and adds db_owner. With Windows auth, it uses your Windows account and does not create `sa`; that account is not required for local runs.
 6) Swagger should open automatically at http://localhost:8080/swagger. Use it to verify endpoints (health endpoint is /health).
 
 Email verification files (for testing)
@@ -47,4 +48,5 @@ Email verification files (for testing)
 Common troubleshooting
 - Port conflicts: if 8080 is in use, update `applicationUrl` in `src/TripShare.Api/Properties/launchSettings.json` and matching CORS/frontend env vars.
 - SQL connectivity: ensure the connection string uses `TrustServerCertificate=True` or proper certificates; confirm SQL Server accepts TCP on 1433 (or the configured port).
+- `sa` account: the app does not auto-create `sa` (SQL Server manages it). For SQL auth, either enable `sa` manually in SQL Server Management Studio and set a strong password, or create a dedicated SQL login (the app will create the login/user and grant db_owner on first run when using that login).
 - Missing SDK: install .NET 10 preview via the Visual Studio Installer if prompted.

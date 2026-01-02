@@ -82,25 +82,27 @@ Frontend runs on:
   - `ApplicationInsights__ConnectionString` (optional)
   - `Telemetry__ApiKey` (optional; if set, the web client should set `VITE_TELEMETRY_KEY`)
 
-### Azure deployment (minimal path)
-1) Provision infra with `azure-deploy.bicep` (SQL, Storage Queue, Redis, App Service, App Insights, Communication Services). Example:
+### Azure deployment (free-tier by default)
+1) Provision infra with `azure-deploy.bicep`. The template defaults to **Free** tier (App Service plan F1, SQL Basic, in-memory cache, dev-file email) and only deploys paid components (Redis, Communication Services, App Insights ingestion) when you opt in.
 ```
 az group create -n tripshare-rg -l eastus
 az deployment group create -g tripshare-rg -f azure-deploy.bicep \
   -p sqlAdminLogin=tripshareadmin sqlAdminPassword=<StrongPassword> \
-  storageName=<uniqueStorage> redisName=<uniqueRedis> communicationName=<uniqueComms>
+  storageName=<uniqueStorage> deploymentTier=Free
 ```
+   - Switch to paid features by setting `deploymentTier=Paid` (creates Redis, Communication Services, paid App Insights, and uses the provided `sku` for the App Service plan).
 2) Build/push API container: `docker build -t <registry>/tripshare-api:latest -f src/TripShare.Api/Dockerfile .` then push.
-3) Set App Service config (if not using Bicep defaults):
+3) App settings to align with the chosen tier (Bicep sets defaults):
+   - `Deployment__Tier=Free` (default) uses in-memory cache, dev-file email, Text.lk SMS; set to `Paid` to use Redis, ACS email/SMS, and Application Insights.
    - `ConnectionStrings__DefaultConnection`
    - `Jwt__SigningKey`
    - `Cors__AllowedOrigins__0=https://<your-web>`
    - `BackgroundJobs__Provider=StorageQueue`
    - `BackgroundJobs__StorageQueue__ConnectionString=<storage-conn>`
-   - `Cache__RedisConnection=<redis-conn>`
-   - `ApplicationInsights__ConnectionString=<ai>`
-   - `Email__Mode=Acs` + `Email__Acs__ConnectionString` + `Email__Acs__FromEmail`
-   - `Sms__Provider=Acs` + `Sms__Acs__ConnectionString` + `Sms__Acs__Sender`
+   - `Cache__RedisConnection=<redis-conn>` (only when using `Deployment__Tier=Paid`)
+   - `ApplicationInsights__ConnectionString=<ai>` (only when using `Deployment__Tier=Paid`)
+   - `Email__Mode=Acs` + `Email__Acs__ConnectionString` + `Email__Acs__FromEmail` (Paid), otherwise `DevFile`/`Smtp`
+   - `Sms__Provider=Acs` + `Sms__Acs__ConnectionString` + `Sms__Acs__Sender` (Paid) or `TextLk` (default)
 4) Frontend: build and host `src/tripshare-web/dist` via Static Web Apps/App Service/Front Door with `VITE_API_BASE` pointing to the API. Align CORS with the web host.
 
 ## Email verification gate
@@ -176,6 +178,7 @@ docker compose up --build
 
 ### Local (Visual Studio / VS Code)
 - Open `TripShare.sln`, ensure `ConnectionStrings:DefaultConnection` is set, and run `TripShare.Api`.
+- With `Database:AutoCreate=true` (default for Development) the API will create the database and SQL login/user on first run if they don't exist.
 - In `src/tripshare-web`, copy `.env.example` to `.env`, set API base + Google keys, then `npm install && npm run dev`.
 
 ## Production readiness upgrades (included)

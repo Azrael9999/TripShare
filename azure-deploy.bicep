@@ -2,16 +2,21 @@ param location string = resourceGroup().location
 param sqlAdminLogin string
 @secure()
 param sqlAdminPassword string
+param deploymentTier string = 'Free'
+@allowed([
+  'Free'
+  'Paid'
+])
 param appInsightsName string = 'tripshare-ai'
 param storageName string
-param redisName string
-param communicationName string
+param redisName string = 'tripshare-cache'
+param communicationName string = 'tripshare-comms'
 param apiName string = 'tripshare-api'
 param sku string = 'B1'
 @secure()
 param jwtSigningKey string
 param corsAllowedOrigins array = []
-param emailMode string = 'Acs'
+param emailMode string = 'DevFile'
 param emailFromName string = 'HopTrip'
 param emailFromEmail string = ''
 @secure()
@@ -23,7 +28,7 @@ param emailSmtpUseSsl bool = true
 param emailSmtpUsername string = ''
 @secure()
 param emailSmtpPassword string = ''
-param smsProvider string = 'Acs'
+param smsProvider string = 'TextLk'
 @secure()
 param smsTextLkApiKey string = ''
 param smsTextLkSenderId string = ''
@@ -38,6 +43,13 @@ var sqlServerName = '${apiName}-sql'
 var dbName = 'TripShareDb'
 var queueName = 'tripshare-jobs'
 var poisonQueue = 'tripshare-jobs-poison'
+var usePaid = toLower(deploymentTier) == 'paid'
+var planSkuName = usePaid ? sku : 'F1'
+var planSkuTier = usePaid ? 'Basic' : 'Free'
+var sqlSkuName = usePaid ? 'GP_S_Gen5_2' : 'Basic'
+var enableRedis = usePaid
+var enableCommunication = usePaid
+var enableAppInsights = usePaid
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageName
@@ -73,6 +85,8 @@ resource redis 'Microsoft.Cache/Redis@2023-08-01' = {
   properties: {
     enableNonSslPort: false
   }
+  dependsOn: [storage]
+  if: enableRedis
 }
 
 resource comms 'Microsoft.Communication/communicationServices@2023-04-01' = {
@@ -81,6 +95,7 @@ resource comms 'Microsoft.Communication/communicationServices@2023-04-01' = {
   properties: {
     dataLocation: 'UnitedStates'
   }
+  if: enableCommunication
 }
 
 resource sqlServer 'Microsoft.Sql/servers@2022-11-01-preview' = {
@@ -98,7 +113,7 @@ resource sqlDb 'Microsoft.Sql/servers/databases@2022-11-01-preview' = {
   name: '${sqlServer.name}/${dbName}'
   location: location
   sku: {
-    name: 'GP_S_Gen5_2'
+    name: sqlSkuName
   }
   properties: {
     readScale: 'Disabled'
@@ -109,8 +124,8 @@ resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${apiName}-plan'
   location: location
   sku: {
-    name: sku
-    tier: 'Basic'
+    name: planSkuName
+    tier: planSkuTier
   }
   kind: 'linux'
   properties: {
@@ -135,8 +150,8 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'BackgroundJobs__StorageQueue__ConnectionString', value: storage.listKeys().keys[0].value }
         { name: 'BackgroundJobs__StorageQueue__QueueName', value: queueName }
         { name: 'BackgroundJobs__StorageQueue__PoisonQueueName', value: poisonQueue }
-        { name: 'Cache__RedisConnection', value: redis.properties.hostName != '' ? '${redis.properties.hostName}:6380,password=${redis.listKeys().primaryKey},ssl=True,abortConnect=False' : '' }
-        { name: 'ApplicationInsights__ConnectionString', value: appInsights.properties.ConnectionString }
+        { name: 'Cache__RedisConnection', value: enableRedis ? '${redis.properties.hostName}:6380,password=${redis.listKeys().primaryKey},ssl=True,abortConnect=False' : '' }
+        { name: 'ApplicationInsights__ConnectionString', value: enableAppInsights ? appInsights.properties.ConnectionString : '' }
         { name: 'Jwt__SigningKey', value: jwtSigningKey }
         { name: 'Email__Mode', value: emailMode }
         { name: 'Email__FromName', value: emailFromName }
@@ -155,6 +170,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Sms__Acs__ConnectionString', value: smsAcsConnectionString }
         { name: 'Sms__Acs__Sender', value: smsAcsSender }
         { name: 'Telemetry__ApiKey', value: telemetryApiKey }
+        { name: 'Deployment__Tier', value: deploymentTier }
         for origin in corsAllowedOrigins: {
           name: 'Cors__AllowedOrigins__${indexOf(corsAllowedOrigins, origin)}'
           value: origin
@@ -171,9 +187,10 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
   }
+  if: enableAppInsights
 }
 
 output storageConnection string = storage.listKeys().keys[0].value
-output redisConnection string = '${redis.properties.hostName}:6380,password=${redis.listKeys().primaryKey},ssl=True,abortConnect=False'
+output redisConnection string = enableRedis ? '${redis.properties.hostName}:6380,password=${redis.listKeys().primaryKey},ssl=True,abortConnect=False' : ''
 output sqlConnection string = 'Server=tcp:${sqlServer.name}.database.windows.net,1433;Database=${dbName};User ID=${sqlAdminLogin};Password=<redacted>;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-output appInsightsConnection string = appInsights.properties.ConnectionString
+output appInsightsConnection string = enableAppInsights ? appInsights.properties.ConnectionString : ''

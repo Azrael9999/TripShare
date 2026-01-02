@@ -2,12 +2,14 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using DbUp;
+using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Data.SqlClient;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Enrichers.CorrelationId;
@@ -94,15 +96,7 @@ builder.Services.AddCors(options =>
 });
 
 // Telemetry
-builder.Services.AddApplicationInsightsTelemetry(opt =>
-{
-    var connectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
-    if (!string.IsNullOrWhiteSpace(connectionString))
-    {
-        opt.ConnectionString = connectionString;
-    }
-    opt.EnableAdaptiveSampling = true;
-});
+ConfigureTelemetry(builder.Services, builder.Configuration);
 
 builder.Services.AddHealthChecks()
     .AddCheck<SqlConnectionHealthCheck>(
@@ -224,7 +218,9 @@ builder.Services.AddHostedService<BackgroundJobHostedService>();
 builder.Services.AddSingleton<TripLocationStreamService>();
 
 // Distributed cache (Redis if configured, else memory)
-var redisConnection = builder.Configuration["Cache:RedisConnection"];
+var redisConnection = ShouldUsePaidAzure(builder.Configuration)
+    ? builder.Configuration["Cache:RedisConnection"]
+    : null;
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     builder.Services.AddStackExchangeRedisCache(opt => opt.Configuration = redisConnection);
@@ -287,6 +283,12 @@ static async Task EnsureDatabaseReadyAsync(WebApplication app)
     var cs = cfg.GetConnectionString("DefaultConnection")
              ?? throw new InvalidOperationException("Missing ConnectionStrings:DefaultConnection");
 
+    var autoCreate = cfg.GetValue("Database:AutoCreate", env.IsDevelopment());
+    if (autoCreate)
+    {
+        await EnsureDatabaseAndUserAsync(cs, log, env);
+    }
+
     // Apply DbUp embedded scripts (recommended for production).
     try
     {
@@ -317,6 +319,84 @@ static async Task EnsureDatabaseReadyAsync(WebApplication app)
         }
 
         throw;
+    }
+}
+
+static async Task EnsureDatabaseAndUserAsync(string connectionString, ILogger log, IHostEnvironment env)
+{
+    var builder = new SqlConnectionStringBuilder(connectionString);
+
+    if (string.IsNullOrWhiteSpace(builder.InitialCatalog))
+    {
+        throw new InvalidOperationException("Connection string must specify a database.");
+    }
+
+    var masterBuilder = new SqlConnectionStringBuilder(connectionString)
+    {
+        InitialCatalog = "master"
+    };
+
+    await using var masterConnection = new SqlConnection(masterBuilder.ConnectionString);
+    await masterConnection.OpenAsync();
+
+    // Create database if missing
+    await using (var createDb = masterConnection.CreateCommand())
+    {
+        createDb.CommandText = "IF DB_ID(@db) IS NULL BEGIN DECLARE @sql nvarchar(max) = 'CREATE DATABASE ' + QUOTENAME(@db); EXEC(@sql); END";
+        createDb.Parameters.Add(new SqlParameter("@db", builder.InitialCatalog));
+        await createDb.ExecuteNonQueryAsync();
+    }
+
+    if (!builder.IntegratedSecurity &&
+        !string.IsNullOrWhiteSpace(builder.UserID) &&
+        !builder.UserID.Equals("sa", StringComparison.OrdinalIgnoreCase))
+    {
+        // Ensure login exists for SQL auth scenarios
+        await using (var createLogin = masterConnection.CreateCommand())
+        {
+            createLogin.CommandText = """
+IF NOT EXISTS (SELECT 1 FROM sys.sql_logins WHERE name = @login)
+BEGIN
+    DECLARE @sql nvarchar(max) = 'CREATE LOGIN ' + QUOTENAME(@login) + ' WITH PASSWORD = @pwd';
+    EXEC sp_executesql @sql, N'@pwd nvarchar(256)', @pwd=@password;
+END
+""";
+            createLogin.Parameters.Add(new SqlParameter("@login", builder.UserID));
+            createLogin.Parameters.Add(new SqlParameter("@password", builder.Password));
+            await createLogin.ExecuteNonQueryAsync();
+        }
+
+        // Ensure database user exists and can manage the schema
+        await using var dbConnection = new SqlConnection(builder.ConnectionString);
+        await dbConnection.OpenAsync();
+
+        await using var createUser = dbConnection.CreateCommand();
+        createUser.CommandText = """
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = @user)
+BEGIN
+    DECLARE @sql nvarchar(max) = 'CREATE USER ' + QUOTENAME(@user) + ' FOR LOGIN ' + QUOTENAME(@login);
+    EXEC(@sql);
+END
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals p ON drm.member_principal_id = p.principal_id
+    WHERE drm.role_principal_id = DATABASE_PRINCIPAL_ID('db_owner') AND p.name = @user)
+BEGIN
+    DECLARE @roleSql nvarchar(max) = 'ALTER ROLE db_owner ADD MEMBER ' + QUOTENAME(@user);
+    EXEC(@roleSql);
+END
+""";
+        createUser.Parameters.Add(new SqlParameter("@user", builder.UserID));
+        createUser.Parameters.Add(new SqlParameter("@login", builder.UserID));
+        await createUser.ExecuteNonQueryAsync();
+
+        log.LogInformation("Ensured database {Database} and login/user {User} exist for {Environment}.", builder.InitialCatalog, builder.UserID, env.EnvironmentName);
+    }
+    else
+    {
+        log.LogInformation("Ensured database {Database} exists (integrated security or sysadmin login).", builder.InitialCatalog);
     }
 }
 
@@ -372,4 +452,34 @@ static void ValidateConfiguration(IConfiguration cfg, IHostEnvironment env)
     {
         throw new InvalidOperationException($"Configuration validation failed: {string.Join("; ", errors)}");
     }
+}
+
+static void ConfigureTelemetry(IServiceCollection services, IConfiguration configuration)
+{
+    var connectionString = configuration["ApplicationInsights:ConnectionString"];
+    var usePaidAzure = ShouldUsePaidAzure(configuration);
+
+    if (usePaidAzure && !string.IsNullOrWhiteSpace(connectionString))
+    {
+        services.AddApplicationInsightsTelemetry(opt =>
+        {
+            opt.ConnectionString = connectionString;
+            opt.EnableAdaptiveSampling = true;
+        });
+    }
+    else
+    {
+        services.Configure<ApplicationInsightsServiceOptions>(opt => opt.EnableAdaptiveSampling = false);
+    }
+}
+
+static bool ShouldUsePaidAzure(IConfiguration configuration)
+{
+    var tier = configuration["Deployment:Tier"] ?? configuration["Deployment__Tier"] ?? "Free";
+    if (tier.Equals("Paid", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    return configuration.GetValue("Deployment:UsePaidFeatures", false);
 }

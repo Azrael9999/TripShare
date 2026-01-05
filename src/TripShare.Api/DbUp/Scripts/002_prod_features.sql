@@ -76,7 +76,8 @@ BEGIN
     );
     CREATE UNIQUE INDEX IX_UserBlocks_Blocker_Blocked ON dbo.UserBlocks(BlockerUserId, BlockedUserId);
     ALTER TABLE dbo.UserBlocks ADD CONSTRAINT FK_UserBlocks_Blocker FOREIGN KEY (BlockerUserId) REFERENCES dbo.Users(Id) ON DELETE CASCADE;
-    ALTER TABLE dbo.UserBlocks ADD CONSTRAINT FK_UserBlocks_Blocked FOREIGN KEY (BlockedUserId) REFERENCES dbo.Users(Id) ON DELETE CASCADE;
+    -- Avoid multiple cascade paths by keeping only the blocker side cascading.
+    ALTER TABLE dbo.UserBlocks ADD CONSTRAINT FK_UserBlocks_Blocked FOREIGN KEY (BlockedUserId) REFERENCES dbo.Users(Id) ON DELETE NO ACTION;
 END
 
 -- Reports

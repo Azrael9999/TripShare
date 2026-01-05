@@ -33,6 +33,7 @@ Configure app settings
 2) Optional env flags (commonly used):
    - `Cors__AllowedOrigins__0=http://localhost:5173` (frontend dev origin)
    - `Email__Mode=DevFile` (already default) keeps verification emails as files.
+   - Background jobs: default provider is Azure Storage Queues. For local runs either start Azurite (`azurite --queue` with `UseDevelopmentStorage=true`) or set `BackgroundJobs__Provider=Sql` to avoid the emulator.
 
 Start the backend in Visual Studio
 1) In Solution Explorer, right-click TripShare.Api and select "Set as Startup Project".

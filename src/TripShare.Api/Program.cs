@@ -1,6 +1,10 @@
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Azure;
+using Azure.Storage.Queues;
 using DbUp;
 using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -214,9 +218,6 @@ builder.Services.AddScoped<SafetyService>();
 builder.Services.AddScoped<MessagingService>();
 builder.Services.AddScoped<IdentityVerificationService>();
 builder.Services.AddHostedService<BookingHousekeepingService>();
-builder.Services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
-builder.Services.AddScoped<BackgroundJobProcessor>();
-builder.Services.AddHostedService<BackgroundJobHostedService>();
 builder.Services.AddSingleton<TripLocationStreamService>();
 
 // Distributed cache (Redis if configured, else memory)
@@ -234,17 +235,27 @@ else
 
 // Background jobs provider
 var jobsProvider = builder.Configuration["BackgroundJobs:Provider"] ?? "StorageQueue";
+var storageQueueFallbackReason = default(string?);
+
 if (jobsProvider.Equals("StorageQueue", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.AddSingleton<StorageQueueBackgroundJobQueue>();
-    builder.Services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<StorageQueueBackgroundJobQueue>());
-    builder.Services.AddHostedService<StorageQueueBackgroundJobProcessor>();
+    if (TryValidateStorageQueue(builder.Configuration, out storageQueueFallbackReason))
+    {
+        RegisterStorageQueueBackgroundJobs(builder.Services);
+    }
+    else if (builder.Environment.IsDevelopment())
+    {
+        jobsProvider = "Sql";
+        RegisterSqlBackgroundJobs(builder.Services);
+    }
+    else
+    {
+        throw new InvalidOperationException($"Storage queue background jobs are enabled but unavailable: {storageQueueFallbackReason}");
+    }
 }
 else
 {
-    builder.Services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
-    builder.Services.AddScoped<BackgroundJobProcessor>();
-    builder.Services.AddHostedService<BackgroundJobHostedService>();
+    RegisterSqlBackgroundJobs(builder.Services);
 }
 
 var app = builder.Build();
@@ -271,6 +282,13 @@ app.MapHealthChecks("/health/ready"); // readiness: include registered checks
 app.MapHealthChecks("/health"); // backward compatibility
 
 await EnsureDatabaseReadyAsync(app);
+
+if (storageQueueFallbackReason is not null)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogWarning("Storage queue provider disabled: {Reason}. Falling back to SQL background jobs. Start Azurite (UseDevelopmentStorage=true) or set BackgroundJobs__Provider=Sql for local runs.", storageQueueFallbackReason);
+}
+
 app.Run();
 
 static async Task EnsureDatabaseReadyAsync(WebApplication app)
@@ -484,4 +502,57 @@ static bool ShouldUsePaidAzure(IConfiguration configuration)
     }
 
     return configuration.GetValue("Deployment:UsePaidFeatures", false);
+}
+
+static void RegisterSqlBackgroundJobs(IServiceCollection services)
+{
+    services.AddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
+    services.AddScoped<BackgroundJobProcessor>();
+    services.AddHostedService<BackgroundJobHostedService>();
+}
+
+static void RegisterStorageQueueBackgroundJobs(IServiceCollection services)
+{
+    services.AddSingleton<StorageQueueBackgroundJobQueue>();
+    services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<StorageQueueBackgroundJobQueue>());
+    services.AddHostedService<StorageQueueBackgroundJobProcessor>();
+}
+
+static bool TryValidateStorageQueue(IConfiguration configuration, out string? reason)
+{
+    var connection = configuration["BackgroundJobs:StorageQueue:ConnectionString"];
+    if (string.IsNullOrWhiteSpace(connection))
+    {
+        reason = "BackgroundJobs:StorageQueue:ConnectionString missing";
+        return false;
+    }
+
+    var queueName = configuration["BackgroundJobs:StorageQueue:QueueName"] ?? "tripshare-jobs";
+    var poisonQueueName = configuration["BackgroundJobs:StorageQueue:PoisonQueueName"] ?? $"{queueName}-poison";
+
+    try
+    {
+        var options = new QueueClientOptions
+        {
+            Retry =
+            {
+                MaxRetries = 1,
+                Delay = TimeSpan.FromSeconds(1),
+                MaxDelay = TimeSpan.FromSeconds(2)
+            }
+        };
+
+        var queue = new QueueClient(connection, queueName, options);
+        var poisonQueue = new QueueClient(connection, poisonQueueName, options);
+
+        queue.Exists();
+        poisonQueue.Exists();
+        reason = null;
+        return true;
+    }
+    catch (Exception ex) when (ex is RequestFailedException or HttpRequestException or SocketException or AggregateException)
+    {
+        reason = ex.Message;
+        return false;
+    }
 }

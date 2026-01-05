@@ -78,7 +78,7 @@ Frontend runs on:
   - `Cors__AllowedOrigins__0=http://localhost:5173`
   - `Sms__Provider` (`TextLk` or `Acs`), `Sms__TextLk:*` or `Sms__Acs:*`
   - `Email__Mode` (`DevFile`, `Smtp`, or `Acs`)
-  - `BackgroundJobs__Provider` (`StorageQueue` recommended; uses Azurite if `UseDevelopmentStorage=true`)
+  - `BackgroundJobs__Provider` (`StorageQueue` recommended; uses Azurite if `UseDevelopmentStorage=true` — run `azurite --queue` or set `BackgroundJobs__Provider=Sql` to avoid the emulator)
   - `ApplicationInsights__ConnectionString` (optional)
   - `Telemetry__ApiKey` (optional; if set, the web client should set `VITE_TELEMETRY_KEY`)
 

@@ -550,7 +550,7 @@ static bool TryValidateStorageQueue(IConfiguration configuration, out string? re
         reason = null;
         return true;
     }
-    catch (Exception ex) when (ex is RequestFailedException or HttpRequestException or SocketException)
+    catch (Exception ex) when (ex is RequestFailedException or HttpRequestException or SocketException or AggregateException)
     {
         reason = ex.Message;
         return false;

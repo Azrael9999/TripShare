@@ -56,6 +56,8 @@ public sealed class AppDbContext : DbContext
             b.HasIndex(x => x.DriverId);
             b.HasIndex(x => new { x.Status, x.UpdatedAt });
             b.Property(x => x.Currency).HasMaxLength(8);
+            b.Property(x => x.BaseCurrencyRate).HasPrecision(18, 6);
+            b.Property(x => x.DefaultPricePerSeat).HasPrecision(18, 2);
             b.HasMany(x => x.RoutePoints).WithOne(x => x.Trip!).HasForeignKey(x => x.TripId);
             b.HasMany(x => x.Segments).WithOne(x => x.Trip!).HasForeignKey(x => x.TripId);
         });
@@ -71,6 +73,7 @@ public sealed class AppDbContext : DbContext
         {
             b.HasIndex(x => new { x.TripId, x.OrderIndex }).IsUnique();
             b.Property(x => x.Currency).HasMaxLength(8);
+            b.Property(x => x.Price).HasPrecision(18, 2);
             b.Property(x => x.RowVersion).IsRowVersion();
         });
 
@@ -83,6 +86,7 @@ public sealed class AppDbContext : DbContext
             b.Property(x => x.DropoffPlaceName).HasMaxLength(200);
             b.Property(x => x.PickupPlaceId).HasMaxLength(128);
             b.Property(x => x.DropoffPlaceId).HasMaxLength(128);
+            b.Property(x => x.PriceTotal).HasPrecision(18, 2);
             b.HasMany(x => x.SegmentAllocations).WithOne(x => x.Booking!).HasForeignKey(x => x.BookingId);
         });
 

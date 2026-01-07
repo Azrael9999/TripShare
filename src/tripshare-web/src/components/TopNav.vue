@@ -54,8 +54,8 @@
     </div>
 
     <!-- Login modal -->
-    <div v-if="openLogin" class="fixed inset-0 z-40 bg-slate-900/40 flex items-center justify-center p-4 soft-modal">
-      <div class="card w-full max-w-xl p-6">
+    <div v-if="openLogin" class="fixed inset-0 z-40 bg-slate-900/60 flex items-center justify-center p-4 soft-modal">
+      <div class="card w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <div class="flex items-start justify-between gap-4">
           <div class="flex-1">
             <div class="text-lg font-semibold">Sign in</div>
@@ -65,14 +65,14 @@
           </div>
           <button class="btn-ghost" @click="openLogin=false"><XMarkIcon class="h-5 w-5"/></button>
         </div>
-        <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="hidden sm:block">
-            <div class="h-full w-full bg-gradient-to-br from-brand-50 to-white rounded-xl flex items-center justify-center border border-slate-100">
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4 items-start">
+          <div class="hidden sm:block self-start">
+            <div class="w-full min-h-[140px] bg-gradient-to-br from-brand-50 to-white rounded-xl flex items-center justify-center border border-slate-100 p-3">
               <img v-if="brandLoginIllustration" :src="brandLoginIllustration" alt="Sign-in illustration" class="max-h-40 object-contain" />
               <div v-else class="text-xs text-slate-500 text-center px-3">Secure sign-in</div>
             </div>
           </div>
-          <div class="sm:col-span-2 space-y-4">
+          <div class="space-y-4">
             <div>
               <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Google</p>
               <GoogleSignIn @success="onGoogleSuccess" />

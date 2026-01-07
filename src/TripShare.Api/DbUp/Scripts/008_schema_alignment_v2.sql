@@ -41,8 +41,12 @@ BEGIN
             WHEN ''CANCELLED'' THEN 5
             ELSE 0
         END)');
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Trips_Status_UpdatedAt' AND object_id = OBJECT_ID('dbo.Trips'))
+        DROP INDEX IX_Trips_Status_UpdatedAt ON dbo.Trips;
     ALTER TABLE dbo.Trips DROP COLUMN Status;
     EXEC sp_rename 'dbo.Trips.StatusInt', 'Status', 'COLUMN';
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Trips_Status_UpdatedAt' AND object_id = OBJECT_ID('dbo.Trips'))
+        CREATE INDEX IX_Trips_Status_UpdatedAt ON dbo.Trips(Status, UpdatedAt);
 END
 
 IF EXISTS (
@@ -64,8 +68,12 @@ BEGIN
             WHEN ''COMPLETED'' THEN 4
             ELSE 0
         END)');
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bookings_Trip_Status' AND object_id = OBJECT_ID('dbo.Bookings'))
+        DROP INDEX IX_Bookings_Trip_Status ON dbo.Bookings;
     ALTER TABLE dbo.Bookings DROP COLUMN Status;
     EXEC sp_rename 'dbo.Bookings.StatusInt', 'Status', 'COLUMN';
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bookings_Trip_Status' AND object_id = OBJECT_ID('dbo.Bookings'))
+        CREATE INDEX IX_Bookings_Trip_Status ON dbo.Bookings(TripId, Status, ProgressStatus);
 END
 
 IF EXISTS (

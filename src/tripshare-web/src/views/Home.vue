@@ -13,9 +13,13 @@
           </p>
           <div class="flex flex-wrap gap-3">
             <RouterLink to="/create" class="btn-primary-gradient">Create a trip</RouterLink>
-            <button class="btn-outline bg-white/10 text-white border-white/30 hover:bg-white/20" @click="openLoginHint">
+            <RouterLink
+              v-if="!auth.isAuthenticated"
+              to="/sign-in"
+              class="btn-outline bg-white/10 text-white border-white/30 hover:bg-white/20"
+            >
               Sign in to book
-            </button>
+            </RouterLink>
           </div>
         </div>
         <div class="lg:col-span-6 flex justify-end">
@@ -123,7 +127,7 @@
           <div class="mt-4 flex flex-col gap-2">
             <RouterLink to="/create" class="btn-primary-gradient" v-if="auth.isAuthenticated && auth.me?.emailVerified">Create a trip</RouterLink>
             <RouterLink to="/profile" class="btn-outline" v-if="auth.isAuthenticated">Profile</RouterLink>
-            <button class="btn-primary-gradient" v-if="!auth.isAuthenticated" @click="openLoginHint">Sign in</button>
+            <RouterLink to="/sign-in" class="btn-primary-gradient" v-if="!auth.isAuthenticated">Sign in</RouterLink>
           </div>
         </div>
 
@@ -209,11 +213,6 @@ async function search() {
   } finally {
     loading.value = false
   }
-}
-
-function openLoginHint() {
-  // The TopNav shows a login modal; hint users with query parameter.
-  window.location.href = '/?login=1'
 }
 
 search()

@@ -114,6 +114,7 @@
 
         <div v-if="!auth.isAuthenticated" class="mt-2 text-sm text-slate-600">
           Please sign in to book.
+          <RouterLink to="/sign-in" class="text-brand-700 font-medium ml-1">Go to sign in</RouterLink>
         </div>
 
         <div v-else-if="!auth.me?.emailVerified" class="mt-2 text-sm text-slate-600">

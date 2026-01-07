@@ -1,9 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using TripShare.Application.Abstractions;
 using TripShare.Application.Contracts;
 using TripShare.Domain.Entities;
@@ -172,92 +168,6 @@ public sealed class AuthService
 
         if (!user.EmailVerified)
             await SendVerificationEmailInternalAsync(user, ct);
-
-        return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
-    }
-
-    public async Task<AuthResponse> SsoLoginAsync(SsoLoginRequest req, CancellationToken ct)
-    {
-        var providerKey = $"Auth:Sso:{req.Provider}";
-        var section = _cfg.GetSection(providerKey);
-        var issuer = section["Issuer"];
-        var audience = section["Audience"] ?? _cfg["Jwt:Audience"];
-        var signingKey = section["SigningKey"];
-        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(signingKey))
-            throw new InvalidOperationException($"SSO provider {req.Provider} is not configured.");
-
-        var handler = new JwtSecurityTokenHandler();
-        var parameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-        ClaimsPrincipal principal;
-        try
-        {
-            principal = handler.ValidateToken(req.IdToken, parameters, out _);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Failed to validate SSO token for provider {Provider}", req.Provider);
-            throw new InvalidOperationException("Unable to validate SSO token.");
-        }
-
-        var sub = principal.FindFirstValue("sub") ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        var email = NormalizeEmail(req.Email ?? principal.FindFirstValue(ClaimTypes.Email) ?? "");
-        if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
-            throw new InvalidOperationException("SSO token missing subject or email.");
-
-        var providerId = $"sso:{req.Provider}";
-        var user = await _db.Users.SingleOrDefaultAsync(x => x.AuthProvider == providerId && x.ProviderUserId == sub, ct);
-        if (user is null)
-        {
-            user = await _db.Users.SingleOrDefaultAsync(x => x.Email == email, ct);
-        }
-
-        if (user is null)
-        {
-            user = new User
-            {
-                Email = email,
-                DisplayName = principal.Identity?.Name ?? email.Split('@')[0],
-                AuthProvider = providerId,
-                ProviderUserId = sub,
-                EmailVerified = true,
-                IdentityVerified = false
-            };
-            _db.Users.Add(user);
-        }
-        else
-        {
-            EnsureActive(user);
-            user.AuthProvider = providerId;
-            user.ProviderUserId = sub;
-            user.Email = email;
-        }
-
-        user.LastLoginAt = DateTimeOffset.UtcNow;
-        await _db.SaveChangesAsync(ct);
-
-        if (user.IsSuspended)
-            return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
-
-        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
-        var (refresh, refreshHash) = _tokens.CreateRefreshToken();
-        _db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            TokenHash = refreshHash,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(int.TryParse(_cfg["Jwt:RefreshTokenDays"], out var d) ? d : 30),
-            CreatedIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
-        });
-        await _db.SaveChangesAsync(ct);
 
         return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
     }

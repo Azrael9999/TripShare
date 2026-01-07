@@ -54,7 +54,7 @@
     </div>
 
     <!-- Login modal -->
-    <div v-if="openLogin" class="fixed inset-0 z-40 bg-slate-900/60 flex items-start justify-center p-4 sm:p-6 overflow-y-auto soft-modal">
+    <div v-if="openLogin" class="fixed inset-0 z-[9999] bg-slate-900/60 flex items-start justify-center p-4 sm:p-6 overflow-y-auto soft-modal">
       <div class="card w-full max-w-5xl p-6 mt-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div class="flex items-start justify-between gap-4">
           <div class="flex-1">

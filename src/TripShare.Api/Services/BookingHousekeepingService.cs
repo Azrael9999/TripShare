@@ -49,6 +49,7 @@ public sealed class BookingHousekeepingService : BackgroundService
         var expired = await db.Bookings
             .Include(x => x.Trip)
             .Where(x => x.Status == BookingStatus.Pending && x.PendingExpiresAt != null && x.PendingExpiresAt <= now)
+            .OrderBy(x => x.PendingExpiresAt)
             .Take(200)
             .ToListAsync(ct);
 
@@ -68,6 +69,7 @@ public sealed class BookingHousekeepingService : BackgroundService
         var toComplete = await db.Trips
             .Include(x => x.Bookings)
             .Where(x => (x.Status == TripStatus.Scheduled || x.Status == TripStatus.EnRoute || x.Status == TripStatus.Arrived) && x.DepartureTimeUtc <= autoCompleteCutoff)
+            .OrderBy(x => x.DepartureTimeUtc)
             .Take(50)
             .ToListAsync(ct);
 

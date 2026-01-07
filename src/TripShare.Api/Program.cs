@@ -176,6 +176,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
     {
         sql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
     });
+    opt.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
 });
 
 // Auth

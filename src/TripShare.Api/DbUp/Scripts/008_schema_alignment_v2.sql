@@ -42,7 +42,7 @@ BEGIN
             ELSE 0
         END)');
     ALTER TABLE dbo.Trips DROP COLUMN Status;
-    EXEC sp_rename ''dbo.Trips.StatusInt'', ''Status'', ''COLUMN'';
+    EXEC sp_rename 'dbo.Trips.StatusInt', 'Status', 'COLUMN';
 END
 
 IF EXISTS (
@@ -65,7 +65,7 @@ BEGIN
             ELSE 0
         END)');
     ALTER TABLE dbo.Bookings DROP COLUMN Status;
-    EXEC sp_rename ''dbo.Bookings.StatusInt'', ''Status'', ''COLUMN'';
+    EXEC sp_rename 'dbo.Bookings.StatusInt', 'Status', 'COLUMN';
 END
 
 IF EXISTS (
@@ -86,5 +86,5 @@ BEGIN
             ELSE 0
         END)');
     ALTER TABLE dbo.TripRoutePoints DROP COLUMN Type;
-    EXEC sp_rename ''dbo.TripRoutePoints.TypeInt'', ''Type'', ''COLUMN'';
+    EXEC sp_rename 'dbo.TripRoutePoints.TypeInt', 'Type', 'COLUMN';
 END

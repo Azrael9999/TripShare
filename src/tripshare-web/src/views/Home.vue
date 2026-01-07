@@ -23,32 +23,31 @@
             <div class="card bg-white/90 shadow-soft border-white">
               <div class="p-5">
                 <div class="text-slate-700 font-semibold mb-3">Find your next ride</div>
-                <div class="flex flex-col sm:flex-row sm:items-end gap-3">
-                  <div class="flex-1">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                  <div class="min-w-0">
                     <label class="text-sm text-slate-600">Search</label>
                     <input v-model="query" class="input mt-1" placeholder="City, landmark, route..." />
                   </div>
-                  <div class="w-full sm:w-56">
+                  <div class="min-w-0">
                     <label class="text-sm text-slate-600">From (UTC)</label>
                     <input v-model="from" type="datetime-local" class="input mt-1" />
                   </div>
-                  <div class="w-full sm:w-56">
+                  <div class="min-w-0">
                     <label class="text-sm text-slate-600">To (UTC)</label>
                     <input v-model="to" type="datetime-local" class="input mt-1" />
                   </div>
-                  <button class="btn-primary-gradient" @click="search">Search</button>
+                  <button class="btn-primary-gradient w-full lg:w-auto" @click="search">Search</button>
                 </div>
-                <div class="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
                   <label class="chip">
                     <input type="checkbox" v-model="verifiedOnly" class="mr-2" />
                     Verified drivers only
                   </label>
-                  <div class="flex-1"></div>
-                  <div class="w-full sm:w-56">
+                  <div class="min-w-0">
                     <label class="text-xs text-slate-600">Min driver rating</label>
                     <input v-model.number="minRating" type="number" step="0.1" min="0" max="5" class="input mt-1" />
                   </div>
-                  <div class="w-full sm:w-56">
+                  <div class="min-w-0">
                     <label class="text-xs text-slate-600">Max price per seat</label>
                     <input v-model.number="maxPrice" type="number" step="1" min="0" class="input mt-1" />
                   </div>

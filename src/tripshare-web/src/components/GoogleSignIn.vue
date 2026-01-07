@@ -17,7 +17,7 @@ declare global {
 }
 
 onMounted(() => {
-  const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID
+  const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID ?? '426254863138-thl2o6eqo7uq3km80kg1nrcv4n27c890.apps.googleusercontent.com'
   if (!clientId) {
     error.value = 'Google Client ID is missing. Set VITE_GOOGLE_CLIENT_ID in .env.'
     return

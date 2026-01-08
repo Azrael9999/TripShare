@@ -13,12 +13,15 @@ public sealed class RequireVerifiedEmailAttribute : Attribute, IAuthorizationFil
             return;
 
         var ev = user.Claims.FirstOrDefault(c => c.Type == "ev")?.Value;
-        if (!string.Equals(ev, "true", StringComparison.OrdinalIgnoreCase))
+        var pv = user.Claims.FirstOrDefault(c => c.Type == "pv")?.Value;
+        var emailVerified = string.Equals(ev, "true", StringComparison.OrdinalIgnoreCase);
+        var phoneVerified = string.Equals(pv, "true", StringComparison.OrdinalIgnoreCase);
+        if (!emailVerified || !phoneVerified)
         {
             context.Result = new ObjectResult(new
             {
-                error = "email_not_verified",
-                message = "Email must be verified to perform this action."
+                error = "contact_not_verified",
+                message = "Email and phone number must be verified to perform this action."
             })
             { StatusCode = StatusCodes.Status403Forbidden };
         }

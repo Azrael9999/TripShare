@@ -28,14 +28,15 @@ public sealed class TokenService : ITokenService
         _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
     }
 
-    public string CreateAccessToken(Guid userId, string email, string role, bool emailVerified)
+    public string CreateAccessToken(Guid userId, string email, string role, bool emailVerified, bool phoneVerified)
     {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new(JwtRegisteredClaimNames.Email, email),
             new(ClaimTypes.Role, role),
-            new("ev", emailVerified ? "true" : "false")
+            new("ev", emailVerified ? "true" : "false"),
+            new("pv", phoneVerified ? "true" : "false")
         };
 
         var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);

@@ -205,6 +205,7 @@ builder.Services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
 builder.Services.AddScoped<IEmailSender, EmailSenderFactory>();
 builder.Services.AddSingleton<AcsSmsSender>();
 builder.Services.AddSingleton<TextLkSmsSender>();
+builder.Services.AddSingleton<DevFileSmsSender>();
 builder.Services.AddScoped<ISmsSender, SmsSenderRouter>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TripService>();

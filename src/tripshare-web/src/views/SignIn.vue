@@ -4,7 +4,7 @@
       <div>
         <div class="text-2xl font-semibold">Sign in</div>
         <p class="text-sm text-slate-600 mt-1">
-          Trips can be created and booked only after email verification.
+          Trips can be created and booked only after verifying both email and phone.
         </p>
       </div>
       <RouterLink to="/" class="btn-ghost">Back to home</RouterLink>
@@ -24,6 +24,39 @@
           <GoogleSignIn @success="onGoogleSuccess" />
         </div>
 
+        <div class="border-t border-slate-100 pt-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Email & Password</p>
+            <button class="btn-ghost text-xs" type="button" @click="isRegister = !isRegister">
+              {{ isRegister ? 'Use existing account' : 'Create an account' }}
+            </button>
+          </div>
+
+          <div class="space-y-3">
+            <div v-if="isRegister" class="space-y-1">
+              <label class="block text-xs text-slate-600">Display name</label>
+              <input v-model="displayName" class="input" placeholder="Your name" />
+            </div>
+            <div class="space-y-1">
+              <label class="block text-xs text-slate-600">Email address</label>
+              <input v-model="email" class="input" placeholder="name@example.com" type="email" />
+            </div>
+            <div class="space-y-1">
+              <label class="block text-xs text-slate-600">Password</label>
+              <input v-model="password" class="input" placeholder="••••••••" type="password" />
+            </div>
+            <button class="btn-primary w-full" :disabled="passwordLoading || !email || !password || (isRegister && !displayName)" @click="submitPassword">
+              <span v-if="passwordLoading">{{ isRegister ? 'Creating account...' : 'Signing in...' }}</span>
+              <span v-else>{{ isRegister ? 'Create account' : 'Sign in with password' }}</span>
+            </button>
+            <RouterLink to="/reset-password" class="text-xs text-brand-700 font-medium inline-flex items-center justify-center w-full">
+              Forgot password?
+            </RouterLink>
+            <p v-if="passwordError" class="text-xs text-red-600">{{ passwordError }}</p>
+            <p v-if="passwordNote" class="text-xs text-emerald-700">{{ passwordNote }}</p>
+          </div>
+        </div>
+
         <div class="border-t border-slate-100 pt-4">
           <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">SMS OTP</p>
           <div class="space-y-3">
@@ -31,21 +64,17 @@
               <label class="block text-xs text-slate-600">Phone number</label>
               <input v-model="smsPhone" class="input" placeholder="+94..." />
             </div>
-            <div class="flex items-center gap-3">
-              <button class="btn-secondary" :disabled="sendingOtp || !smsPhone" @click="sendSmsOtp">
-                <span v-if="sendingOtp">Sending...</span>
-                <span v-else>Send code</span>
-              </button>
-              <span v-if="otpSent" class="text-xs text-green-700">Code sent</span>
-            </div>
             <div class="space-y-1">
               <label class="block text-xs text-slate-600">Enter code</label>
               <input v-model="smsOtp" class="input" placeholder="6-digit code" />
             </div>
-            <button class="btn-primary w-full" :disabled="verifying || !smsOtp" @click="verifySms">
-              <span v-if="verifying">Verifying...</span>
-              <span v-else>Sign in with SMS</span>
+            <button class="btn-primary w-full" :disabled="smsBusy || !smsPhone || (!smsOtp && !canResendSms)" @click="handleSmsAction">
+              <span v-if="smsBusy">Working...</span>
+              <span v-else-if="smsOtp">Verify & sign in</span>
+              <span v-else-if="canResendSms">Send code</span>
+              <span v-else>Resend available in {{ smsCountdown }}s</span>
             </button>
+            <p v-if="otpSent" class="text-xs text-green-700">Code sent. Enter it above to continue.</p>
             <p v-if="smsError" class="text-xs text-red-600">{{ smsError }}</p>
           </div>
         </div>
@@ -59,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import GoogleSignIn from '../components/GoogleSignIn.vue'
@@ -73,6 +102,16 @@ const otpSent = ref(false)
 const smsError = ref('')
 const sendingOtp = ref(false)
 const verifying = ref(false)
+const smsCountdown = ref(0)
+const resendAvailableAt = ref<number | null>(null)
+let resendTimer: number | null = null
+const email = ref('')
+const password = ref('')
+const displayName = ref('')
+const isRegister = ref(false)
+const passwordLoading = ref(false)
+const passwordError = ref('')
+const passwordNote = ref('')
 const normalizedPhone = computed(() => smsPhone.value.trim())
 const isValidSriLankaPhone = computed(() => isLkPhone(normalizedPhone.value))
 const brandLoginIllustration = computed(() => (hasImage(brandConfig.loginIllustrationUrl) ? brandConfig.loginIllustrationUrl : ''))
@@ -84,6 +123,25 @@ function redirectHome() {
 async function onGoogleSuccess(idToken: string) {
   await auth.googleLogin(idToken)
   redirectHome()
+}
+
+async function submitPassword() {
+  passwordError.value = ''
+  passwordNote.value = ''
+  passwordLoading.value = true
+  try {
+    if (isRegister.value) {
+      await auth.passwordRegister(email.value.trim(), password.value, displayName.value.trim())
+      passwordNote.value = 'Account created. Please verify your email.'
+    } else {
+      await auth.passwordLogin(email.value.trim(), password.value)
+    }
+    redirectHome()
+  } catch (err: any) {
+    passwordError.value = err?.response?.data?.message ?? 'Unable to sign in.'
+  } finally {
+    passwordLoading.value = false
+  }
 }
 
 async function sendSmsOtp() {
@@ -120,12 +178,46 @@ async function verifySms() {
   }
 }
 
+const smsBusy = computed(() => sendingOtp.value || verifying.value)
+
+const canResendSms = computed(() => {
+  return !resendAvailableAt.value || Date.now() >= resendAvailableAt.value
+})
+
+function startResendTimer(seconds: number) {
+  resendAvailableAt.value = Date.now() + seconds * 1000
+  if (resendTimer) window.clearInterval(resendTimer)
+  smsCountdown.value = seconds
+  resendTimer = window.setInterval(() => {
+    if (!resendAvailableAt.value) return
+    const remaining = Math.max(0, Math.ceil((resendAvailableAt.value - Date.now()) / 1000))
+    smsCountdown.value = remaining
+    if (remaining <= 0 && resendTimer) {
+      window.clearInterval(resendTimer)
+      resendTimer = null
+    }
+  }, 500)
+}
+
+async function handleSmsAction() {
+  if (!smsOtp.value) {
+    await sendSmsOtp()
+    if (!smsError.value) startResendTimer(45)
+    return
+  }
+  await verifySms()
+}
+
 onMounted(() => {
   if (auth.isAuthenticated) redirectHome()
 })
 
 watch(() => auth.isAuthenticated, (isAuthed) => {
   if (isAuthed) redirectHome()
+})
+
+onUnmounted(() => {
+  if (resendTimer) window.clearInterval(resendTimer)
 })
 
 function isLkPhone(value: string) {

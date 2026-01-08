@@ -125,7 +125,7 @@
           <div class="font-semibold">Quick actions</div>
           <p class="text-sm text-slate-600 mt-1">Create trips and manage bookings after verifying your email.</p>
           <div class="mt-4 flex flex-col gap-2">
-            <RouterLink to="/create" class="btn-primary-gradient" v-if="auth.isAuthenticated && auth.me?.emailVerified">Create a trip</RouterLink>
+            <RouterLink to="/create" class="btn-primary-gradient" v-if="auth.isAuthenticated && auth.me?.emailVerified && auth.me?.phoneVerified">Create a trip</RouterLink>
             <RouterLink to="/profile" class="btn-outline" v-if="auth.isAuthenticated">Profile</RouterLink>
             <RouterLink to="/sign-in" class="btn-primary-gradient" v-if="!auth.isAuthenticated">Sign in</RouterLink>
           </div>

@@ -9,6 +9,7 @@ namespace TripShare.Api.Services;
 
 public sealed class AuthService
 {
+    private const string DefaultAdminEmail = "admin@tripshare.local";
     private readonly AppDbContext _db;
     private readonly ITokenService _tokens;
     private readonly IGoogleIdTokenValidator _google;
@@ -82,7 +83,7 @@ public sealed class AuthService
         EnsureActive(user);
 
         // Issue tokens
-        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified, user.PhoneVerified);
         var (refresh, refreshHash) = _tokens.CreateRefreshToken();
 
         _db.RefreshTokens.Add(new RefreshToken
@@ -154,7 +155,7 @@ public sealed class AuthService
         user.LastLoginAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
-        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified, user.PhoneVerified);
         var (refresh, refreshHash) = _tokens.CreateRefreshToken();
         _db.RefreshTokens.Add(new RefreshToken
         {
@@ -170,6 +171,79 @@ public sealed class AuthService
             await SendVerificationEmailInternalAsync(user, ct);
 
         return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
+    }
+
+    public async Task RequestPasswordResetAsync(PasswordResetRequest req, CancellationToken ct)
+    {
+        var email = NormalizeEmail(req.Email);
+        if (string.IsNullOrWhiteSpace(email))
+            return;
+
+        var user = await _db.Users.SingleOrDefaultAsync(x => x.Email == email, ct);
+        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || string.IsNullOrWhiteSpace(user.PasswordSalt))
+        {
+            return;
+        }
+
+        EnsureActive(user);
+
+        var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        var hash = _tokens.HashToken(token);
+        var hours = int.TryParse(_cfg["Email:PasswordReset:TokenHours"], out var h) ? h : 2;
+
+        _db.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            UserId = user.Id,
+            TokenHash = hash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(hours)
+        });
+
+        await _db.SaveChangesAsync(ct);
+
+        var webBase = _cfg["Email:PasswordReset:WebBaseUrl"] ?? _cfg["Email:Verification:WebBaseUrl"] ?? "http://localhost:5173";
+        var link = $"{webBase.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+
+        var body = $@"
+<p>Hi {System.Net.WebUtility.HtmlEncode(user.DisplayName)},</p>
+<p>We received a request to reset your HopTrip password.</p>
+<p><a href=""{link}"">Reset password</a></p>
+<p>This link expires in {hours} hour(s). If you did not request this, you can ignore this email.</p>";
+
+        await _email.SendAsync(user.Email, "Reset your HopTrip password", body, ct);
+        _log.LogInformation("Password reset email queued for {Email}", user.Email);
+    }
+
+    public async Task ConfirmPasswordResetAsync(PasswordResetConfirm req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Token))
+            throw new InvalidOperationException("Reset token is required.");
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 8)
+            throw new InvalidOperationException("Password must be at least 8 characters.");
+
+        var hash = _tokens.HashToken(req.Token);
+        var reset = await _db.PasswordResetTokens.Include(x => x.User)
+            .SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
+
+        if (reset?.User is null || !reset.IsValid)
+            throw new InvalidOperationException("Reset link is invalid or expired.");
+
+        var user = await _db.Users.Include(x => x.RefreshTokens)
+            .SingleAsync(x => x.Id == reset.User.Id, ct);
+        EnsureActive(user);
+
+        var (newHash, newSalt) = HashPassword(req.NewPassword);
+        user.PasswordHash = newHash;
+        user.PasswordSalt = newSalt;
+        user.AuthProvider = "password";
+        user.ProviderUserId = user.Email;
+        reset.UsedAt = DateTimeOffset.UtcNow;
+
+        foreach (var token in user.RefreshTokens.Where(x => x.RevokedAt == null))
+        {
+            token.RevokedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
     }
 
     public async Task<AuthResponse> RefreshAsync(RefreshRequest req, CancellationToken ct)
@@ -194,7 +268,7 @@ public sealed class AuthService
             UserAgent = _http.HttpContext?.Request.Headers.UserAgent.ToString()
         });
 
-        var access = _tokens.CreateAccessToken(token.User.Id, token.User.Email, token.User.Role, token.User.EmailVerified);
+        var access = _tokens.CreateAccessToken(token.User.Id, token.User.Email, token.User.Role, token.User.EmailVerified, token.User.PhoneVerified);
         await _db.SaveChangesAsync(ct);
 
         return new AuthResponse(access, newRefresh, RequiresEmailVerification: !token.User.EmailVerified, IsSuspended: false, Me(token.User));
@@ -204,6 +278,8 @@ public sealed class AuthService
     {
         var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
         EnsureActive(user);
+        if (user.IsSuspended)
+            throw new InvalidOperationException("Account is suspended.");
         if (user.EmailVerified) return;
         await SendVerificationEmailInternalAsync(user, ct);
     }
@@ -280,6 +356,73 @@ public sealed class AuthService
         _log.LogInformation("SMS OTP sent to {Phone}", phone);
     }
 
+    public async Task RequestPhoneVerificationAsync(Guid userId, string phoneNumber, CancellationToken ct)
+    {
+        var phone = NormalizePhone(phoneNumber);
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new InvalidOperationException("Phone number is required.");
+
+        var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
+        EnsureActive(user);
+
+        var inUse = await _db.Users.AsNoTracking()
+            .AnyAsync(x => x.Id != userId && x.PhoneNumber == phone && x.PhoneVerified, ct);
+        if (inUse)
+            throw new InvalidOperationException("Phone number is already verified on another account.");
+
+        var expiryMinutes = int.TryParse(_cfg["Sms:OtpMinutes"], out var m) ? m : 10;
+
+        var active = await _db.SmsOtpTokens
+            .Where(x => x.UserId == user.Id && x.UsedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow)
+            .ToListAsync(ct);
+        foreach (var a in active) a.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var otp = Random.Shared.Next(100000, 999999).ToString();
+        var hash = _tokens.HashToken(otp);
+        _db.SmsOtpTokens.Add(new SmsOtpToken
+        {
+            UserId = user.Id,
+            PhoneNumber = phone,
+            TokenHash = hash,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
+        });
+
+        await _db.SaveChangesAsync(ct);
+
+        var msg = $"Your HopTrip phone verification code is {otp}. It expires in {expiryMinutes} minutes.";
+        await _sms.SendAsync(phone, msg, ct);
+        _log.LogInformation("Phone verification OTP sent to {Phone}", phone);
+    }
+
+    public async Task VerifyPhoneVerificationAsync(Guid userId, string phoneNumber, string otp, CancellationToken ct)
+    {
+        var phone = NormalizePhone(phoneNumber);
+        var trimmedOtp = otp?.Trim();
+        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(trimmedOtp))
+            throw new InvalidOperationException("Phone and OTP are required.");
+
+        var hash = _tokens.HashToken(trimmedOtp);
+        var token = await _db.SmsOtpTokens
+            .Include(x => x.User)
+            .Where(x => x.UserId == userId && x.PhoneNumber == phone && x.TokenHash == hash && x.UsedAt == null)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (token?.User is null || !token.IsValid)
+            throw new InvalidOperationException("Invalid or expired code.");
+
+        token.UsedAt = DateTimeOffset.UtcNow;
+
+        var user = token.User;
+        EnsureActive(user);
+        if (user.IsSuspended)
+            throw new InvalidOperationException("Account is suspended.");
+        user.PhoneNumber = phone;
+        user.PhoneVerified = true;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<AuthResponse> VerifySmsOtpAsync(SmsOtpVerifyRequest req, CancellationToken ct)
     {
         var phone = NormalizePhone(req.PhoneNumber);
@@ -308,7 +451,7 @@ public sealed class AuthService
         user.EmailVerified = true; // treat verified phone as verified gate
         user.LastLoginAt = DateTimeOffset.UtcNow;
 
-        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified);
+        var access = _tokens.CreateAccessToken(user.Id, user.Email, user.Role, user.EmailVerified, user.PhoneVerified);
         var (refresh, refreshHash) = _tokens.CreateRefreshToken();
         _db.RefreshTokens.Add(new RefreshToken
         {
@@ -419,6 +562,8 @@ public sealed class AuthService
     {
         var user = await _db.Users.Include(x => x.RefreshTokens).FirstAsync(x => x.Id == userId, ct);
         EnsureActive(user);
+        if (string.Equals(user.Email, DefaultAdminEmail, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The default admin account cannot be deleted.");
         user.IsDeleted = true;
         user.DeletedAt = DateTimeOffset.UtcNow;
         foreach (var token in user.RefreshTokens.Where(x => x.RevokedAt == null))

@@ -38,6 +38,11 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (s) => !!s.accessToken && !!s.me
   },
   actions: {
+    clientContext() {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const locale = navigator.language
+      return { timezone, locale }
+    },
     normalizeMe(raw: any): Me {
       const rawRole = (raw?.role ?? '').toString().toLowerCase()
       const role: Role = rawRole === 'admin' ? 'admin' : 'user'
@@ -102,11 +107,38 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async googleLogin(idToken: string) {
-      const resp = await http.post<AuthResponse>('/auth/google', { idToken })
+      const ctx = this.clientContext()
+      const resp = await http.post<AuthResponse>('/auth/google', { idToken, ...ctx })
       this.accessToken = resp.data.accessToken
       this.refreshToken = resp.data.refreshToken
       this.me = this.normalizeMe(resp.data.me)
       this.persist()
+    },
+
+    async passwordLogin(email: string, password: string) {
+      const ctx = this.clientContext()
+      const resp = await http.post<AuthResponse>('/auth/password/login', { email, password, ...ctx })
+      this.accessToken = resp.data.accessToken
+      this.refreshToken = resp.data.refreshToken
+      this.me = this.normalizeMe(resp.data.me)
+      this.persist()
+    },
+
+    async passwordRegister(email: string, password: string, displayName: string) {
+      const ctx = this.clientContext()
+      const resp = await http.post<AuthResponse>('/auth/password/register', { email, password, displayName, ...ctx })
+      this.accessToken = resp.data.accessToken
+      this.refreshToken = resp.data.refreshToken
+      this.me = this.normalizeMe(resp.data.me)
+      this.persist()
+    },
+
+    async requestPasswordReset(email: string) {
+      await http.post('/auth/password/reset/request', { email })
+    },
+
+    async confirmPasswordReset(token: string, newPassword: string) {
+      await http.post('/auth/password/reset/confirm', { token, newPassword })
     },
 
     async requestSmsOtp(phoneNumber: string) {

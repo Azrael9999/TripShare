@@ -117,8 +117,8 @@
           <RouterLink to="/sign-in" class="text-brand-700 font-medium ml-1">Go to sign in</RouterLink>
         </div>
 
-        <div v-else-if="!auth.me?.emailVerified" class="mt-2 text-sm text-slate-600">
-          Your email is not verified yet. Check your inbox (dev emails are written to the API folder), or resend from your profile.
+        <div v-else-if="!auth.me?.emailVerified || !auth.me?.phoneVerified" class="mt-2 text-sm text-slate-600">
+          Please verify both your email and phone number to book. You can resend the email or verify your phone from your profile.
         </div>
 
         <div v-else class="mt-4 space-y-3">

@@ -67,6 +67,28 @@ public sealed class UsersController : ControllerBase
         return NoContent();
     }
 
+    public sealed record PhoneVerificationRequest(string PhoneNumber);
+
+    public sealed record PhoneVerificationConfirm(string PhoneNumber, string Otp);
+
+    [Authorize]
+    [EnableRateLimiting("verification")]
+    [HttpPost("me/phone/request")]
+    public async Task<IActionResult> RequestPhoneVerification([FromBody] PhoneVerificationRequest req, CancellationToken ct)
+    {
+        await _auth.RequestPhoneVerificationAsync(User.GetUserId(), req.PhoneNumber, ct);
+        return Accepted();
+    }
+
+    [Authorize]
+    [EnableRateLimiting("verification")]
+    [HttpPost("me/phone/verify")]
+    public async Task<IActionResult> VerifyPhone([FromBody] PhoneVerificationConfirm req, CancellationToken ct)
+    {
+        await _auth.VerifyPhoneVerificationAsync(User.GetUserId(), req.PhoneNumber, req.Otp, ct);
+        return NoContent();
+    }
+
     [AllowAnonymous]
     [HttpPost("verify-email")]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token, CancellationToken ct)

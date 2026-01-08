@@ -29,7 +29,9 @@
           </div>
           <div>
             <label class="text-sm text-slate-600">Seat count</label>
-            <input v-model.number="seats" type="number" min="1" max="12" class="input mt-1" />
+            <select v-model.number="seats" class="input mt-1">
+              <option v-for="n in seatOptions" :key="n" :value="n">{{ n }} seats</option>
+            </select>
           </div>
         </div>
 
@@ -65,6 +67,7 @@ const model = ref('')
 const color = ref('')
 const plate = ref('')
 const seats = ref(4)
+const seatOptions = Array.from({ length: 12 }, (_, i) => i + 1)
 
 const saving = ref(false)
 const saved = ref(false)

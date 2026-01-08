@@ -16,6 +16,9 @@ public static class HttpContextUserExtensions
     public static bool IsEmailVerified(this ClaimsPrincipal user)
         => string.Equals(user.Claims.FirstOrDefault(c => c.Type == "ev")?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsPhoneVerified(this ClaimsPrincipal user)
+        => string.Equals(user.Claims.FirstOrDefault(c => c.Type == "pv")?.Value, "true", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsAdmin(this ClaimsPrincipal user)
         => user.IsInRole("admin");
 }

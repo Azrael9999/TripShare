@@ -28,12 +28,17 @@
               <input v-model="profileForm.displayName" class="input mt-1" placeholder="Your name" />
             </div>
             <div>
-              <label class="text-xs text-slate-600">Photo URL</label>
-              <input v-model="profileForm.photoUrl" class="input mt-1" placeholder="https://..." />
+              <label class="text-xs text-slate-600">Profile photo</label>
+              <input type="file" accept="image/*" class="input mt-1" @change="onPhotoSelected" />
+              <p class="text-xs text-slate-500 mt-1">Upload a square image for best results.</p>
             </div>
             <div>
               <label class="text-xs text-slate-600">Phone number</label>
-              <input v-model="profileForm.phoneNumber" class="input mt-1" placeholder="Optional" />
+              <input v-model="profileForm.phoneNumber" class="input mt-1" placeholder="+94XXXXXXXXX" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-600">Photo URL (optional)</label>
+              <input v-model="profileForm.photoUrl" class="input mt-1" placeholder="https://..." />
             </div>
           </div>
 
@@ -65,11 +70,44 @@
           </div>
 
           <p v-if="!auth.me?.emailVerified" class="text-sm text-slate-600 mt-3">
-            Trips can only be created and booked after verification. In development mode, the API writes the email to
+            Trips can only be created and booked after verifying your email and phone number. In development mode, the API writes the email to
             <span class="font-mono">App_Data/dev-emails</span>.
           </p>
 
           <p v-if="msg" class="text-sm text-brand-700 mt-3">{{ msg }}</p>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-slate-100 p-5 bg-slate-50">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold">Phone verification</div>
+              <div class="text-sm text-slate-600 mt-1">
+                Status:
+                <span v-if="auth.me?.phoneVerified" class="badge">Verified</span>
+                <span v-else class="badge bg-amber-50 text-amber-800 border-amber-100">Not verified</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!auth.me?.phoneVerified" class="mt-4 space-y-3">
+            <div>
+              <label class="text-xs text-slate-600">Phone number</label>
+              <input v-model="phoneVerification.phone" class="input mt-1" placeholder="+94XXXXXXXXX" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-600">Verification code</label>
+              <input v-model="phoneVerification.otp" class="input mt-1" placeholder="6-digit code" />
+            </div>
+            <button class="btn-primary w-full" :disabled="phoneVerification.loading || !phoneVerification.phone || (!canResendPhoneCode && !phoneVerification.otp)" @click="submitPhoneVerification">
+              <span v-if="phoneVerification.loading">Working…</span>
+              <span v-else-if="phoneVerification.otp">Verify phone number</span>
+              <span v-else-if="canResendPhoneCode">Send verification code</span>
+              <span v-else>Resend available in {{ resendCountdown }}s</span>
+            </button>
+            <p class="text-xs text-slate-500">Enter your number, then tap to send or verify the code.</p>
+            <p v-if="phoneVerification.error" class="text-sm text-red-600">{{ phoneVerification.error }}</p>
+            <p v-if="phoneVerification.success" class="text-sm text-emerald-700">{{ phoneVerification.success }}</p>
+          </div>
         </div>
 
         <div class="mt-5 rounded-2xl border border-slate-100 p-5 bg-slate-50">
@@ -95,7 +133,12 @@
           <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-slate-600">Document type</label>
-              <input v-model="idvForm.documentType" class="input mt-1" placeholder="Driver license / NIC / Passport" />
+              <select v-model="idvForm.documentType" class="input mt-1">
+                <option value="">Select a document</option>
+                <option value="DriverLicense">Driver license</option>
+                <option value="NIC">National ID</option>
+                <option value="Passport">Passport</option>
+              </select>
             </div>
             <div>
               <label class="text-xs text-slate-600">Document reference</label>
@@ -158,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AdSlot from '../components/AdSlot.vue'
 import { useAuthStore } from '../stores/auth'
@@ -183,6 +226,16 @@ const profileForm = ref({ displayName: '', photoUrl: '', phoneNumber: '' })
 const profileSaving = ref(false)
 const profileMsg = ref('')
 const profileErr = ref('')
+const phoneVerification = ref({
+  phone: '',
+  otp: '',
+  loading: false,
+  error: '',
+  success: ''
+})
+const resendAvailableAt = ref<number | null>(null)
+const resendCountdown = ref(0)
+let resendTimer: number | null = null
 const exporting = ref(false)
 const deleting = ref(false)
 
@@ -206,6 +259,20 @@ function syncProfileForm() {
   profileForm.value.displayName = auth.me?.displayName ?? ''
   profileForm.value.photoUrl = auth.me?.photoUrl ?? ''
   profileForm.value.phoneNumber = auth.me?.phoneNumber ?? ''
+  if (!phoneVerification.value.phone) {
+    phoneVerification.value.phone = auth.me?.phoneNumber ?? ''
+  }
+}
+
+function onPhotoSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0] ?? null
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    profileForm.value.photoUrl = String(reader.result)
+  }
+  reader.readAsDataURL(file)
 }
 
 async function updateProfile() {
@@ -296,8 +363,56 @@ async function submitIdv() {
   }
 }
 
+function startResendTimer(seconds: number) {
+  resendAvailableAt.value = Date.now() + seconds * 1000
+  if (resendTimer) window.clearInterval(resendTimer)
+  resendCountdown.value = seconds
+  resendTimer = window.setInterval(() => {
+    if (!resendAvailableAt.value) return
+    const remaining = Math.max(0, Math.ceil((resendAvailableAt.value - Date.now()) / 1000))
+    resendCountdown.value = remaining
+    if (remaining <= 0 && resendTimer) {
+      window.clearInterval(resendTimer)
+      resendTimer = null
+    }
+  }, 500)
+}
+
+const canResendPhoneCode = computed(() => {
+  return !resendAvailableAt.value || Date.now() >= resendAvailableAt.value
+})
+
+async function submitPhoneVerification() {
+  phoneVerification.value.error = ''
+  phoneVerification.value.success = ''
+  phoneVerification.value.loading = true
+  try {
+    if (!phoneVerification.value.otp) {
+      await http.post('/users/me/phone/request', { phoneNumber: phoneVerification.value.phone.trim() })
+      phoneVerification.value.success = 'Code sent. Check your phone.'
+      startResendTimer(45)
+    } else {
+      await http.post('/users/me/phone/verify', {
+        phoneNumber: phoneVerification.value.phone.trim(),
+        otp: phoneVerification.value.otp.trim()
+      })
+      phoneVerification.value.success = 'Phone number verified.'
+      phoneVerification.value.otp = ''
+      await auth.refresh()
+    }
+  } catch (err: any) {
+    phoneVerification.value.error = err?.response?.data?.message ?? 'Unable to verify phone.'
+  } finally {
+    phoneVerification.value.loading = false
+  }
+}
+
 onMounted(() => {
   syncProfileForm()
   void loadIdv()
+})
+
+onUnmounted(() => {
+  if (resendTimer) window.clearInterval(resendTimer)
 })
 </script>

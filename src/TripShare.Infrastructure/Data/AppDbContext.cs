@@ -11,6 +11,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
     public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
@@ -130,7 +131,7 @@ public sealed class AppDbContext : DbContext
         {
             b.HasIndex(x => x.Key).IsUnique();
             b.Property(x => x.Key).HasMaxLength(120);
-            b.Property(x => x.Value).HasMaxLength(4000);
+            b.Property(x => x.Value).HasColumnType("nvarchar(max)");
         });
 
 
@@ -144,6 +145,12 @@ public sealed class AppDbContext : DbContext
             b.HasIndex(x => x.UserId);
             b.HasIndex(x => x.PhoneNumber);
             b.Property(x => x.PhoneNumber).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(b =>
+        {
+            b.HasIndex(x => x.UserId);
+            b.HasIndex(x => x.TokenHash).IsUnique();
         });
 
         modelBuilder.Entity<EmergencyContact>(b =>

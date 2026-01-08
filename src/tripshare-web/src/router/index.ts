@@ -11,6 +11,7 @@ import Safety from '../views/Safety.vue'
 import MyTrips from '../views/MyTrips.vue'
 import Messages from '../views/Messages.vue'
 import SignIn from '../views/SignIn.vue'
+import ResetPassword from '../views/ResetPassword.vue'
 import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import AdminReports from '../views/admin/AdminReports.vue'
 import AdminIdentity from '../views/admin/AdminIdentity.vue'
@@ -30,6 +31,7 @@ const router = createRouter({
     { path: '/messages', component: Messages, meta: { requiresAuth: true, title: 'Messages | HopTrip' } },
     { path: '/profile', component: Profile, meta: { requiresAuth: true, title: 'Profile | HopTrip' } },
     { path: '/sign-in', component: SignIn, meta: { title: 'Sign in | HopTrip' } },
+    { path: '/reset-password', component: ResetPassword, meta: { title: 'Reset password | HopTrip' } },
     { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true, title: 'Vehicle profile | HopTrip' } },
     { path: '/safety', component: Safety, meta: { requiresAuth: true, title: 'Safety | HopTrip' } },
     { path: '/verify-email', component: VerifyEmail, meta: { requiresAuth: true, title: 'Verify email | HopTrip' } },
@@ -48,7 +50,11 @@ router.beforeEach(async (to) => {
     return { path: '/sign-in' }
   }
 
-  if ((to.meta as any)?.requiresVerified && auth.isAuthenticated && !auth.me?.emailVerified) {
+  if (to.path === '/sign-in' && auth.isAuthenticated) {
+    return { path: '/' }
+  }
+
+  if ((to.meta as any)?.requiresVerified && auth.isAuthenticated && (!auth.me?.emailVerified || !auth.me?.phoneVerified)) {
     return { path: '/profile', query: { verify: '1' } }
   }
 

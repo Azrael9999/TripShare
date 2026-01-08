@@ -90,6 +90,17 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("branding")]
+    public async Task<IActionResult> GetBranding(CancellationToken ct)
+        => Ok(await _settings.GetBrandingConfigAsync(ct));
+
+    [HttpPost("branding")]
+    public async Task<IActionResult> SetBranding([FromBody] BrandingConfigDto config, CancellationToken ct)
+    {
+        await _settings.SetBrandingConfigAsync(config, ct);
+        return NoContent();
+    }
+
     [HttpPost("users/{userId:guid}/driver-verify")]
     public async Task<IActionResult> VerifyDriver(Guid userId, [FromBody] DriverVerificationRequest req, CancellationToken ct)
     {

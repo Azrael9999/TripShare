@@ -7,6 +7,7 @@ namespace TripShare.Api.Services;
 public sealed class AdminService
 {
     private readonly AppDbContext _db;
+    private const string DefaultAdminEmail = "admin@tripshare.local";
 
     public AdminService(AppDbContext db) => _db = db;
 
@@ -27,6 +28,10 @@ public sealed class AdminService
     {
         var u = await _db.Users.FirstOrDefaultAsync(x => x.Id == userId, ct);
         if (u == null) return;
+        if (suspend && string.Equals(u.Email, DefaultAdminEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
         u.IsSuspended = suspend;
         await _db.SaveChangesAsync(ct);
     }

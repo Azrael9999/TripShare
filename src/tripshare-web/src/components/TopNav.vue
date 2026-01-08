@@ -14,9 +14,9 @@
 
       <nav class="hidden md:flex items-center gap-1">
         <RouterLink to="/" class="btn-ghost">Explore</RouterLink>
-        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/create" class="btn-ghost">Create</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified && auth.me?.phoneVerified" to="/create" class="btn-ghost">Create</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/my-trips" class="btn-ghost">My Trips</RouterLink>
-        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/bookings" class="btn-ghost">Bookings</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified && auth.me?.phoneVerified" to="/bookings" class="btn-ghost">Bookings</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/notifications" class="btn-ghost">
           <span class="inline-flex items-center gap-2">
             <BellIcon class="h-5 w-5"/>
@@ -46,7 +46,7 @@
     <div class="md:hidden border-t border-slate-100 bg-white">
       <div class="mx-auto max-w-6xl px-4 py-2 flex items-center justify-between text-sm">
         <RouterLink to="/" class="btn-ghost px-3 py-2">Explore</RouterLink>
-        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified" to="/create" class="btn-ghost px-3 py-2">Create</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && auth.me?.emailVerified && auth.me?.phoneVerified" to="/create" class="btn-ghost px-3 py-2">Create</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/notifications" class="btn-ghost px-3 py-2">Alerts</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost px-3 py-2">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost px-3 py-2">Profile</RouterLink>

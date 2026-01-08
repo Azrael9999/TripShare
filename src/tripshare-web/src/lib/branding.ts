@@ -39,10 +39,14 @@ export function applyBrandingConfig(config?: BrandingConfig | null) {
 export async function loadBrandingConfig() {
   const apiBase = envOr('http://localhost:8080', 'VITE_API_BASE') ?? 'http://localhost:8080'
   const url = apiBase.replace(/\/$/, '') + '/api/branding'
-  const resp = await fetch(url, { credentials: 'include' })
-  if (!resp.ok) return
-  const data = await resp.json()
-  applyBrandingConfig(data)
+  try {
+    const resp = await fetch(url, { credentials: 'include' })
+    if (!resp.ok || resp.status === 204) return
+    const data = await resp.json()
+    applyBrandingConfig(data)
+  } catch {
+    // swallow branding fetch errors so the app can still render
+  }
 }
 
 export function hasImage(url?: string | null) {

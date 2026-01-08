@@ -62,6 +62,26 @@ builder.Host.UseSerilog((ctx, lc) =>
     }
 });
 
+AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+{
+    if (args.ExceptionObject is Exception ex)
+    {
+        Log.Fatal(ex, "Unhandled exception");
+    }
+    else
+    {
+        Log.Fatal("Unhandled exception: {Exception}", args.ExceptionObject);
+    }
+
+    Log.CloseAndFlush();
+};
+
+TaskScheduler.UnobservedTaskException += (_, args) =>
+{
+    Log.Error(args.Exception, "Unobserved task exception");
+    args.SetObserved();
+};
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 
@@ -284,6 +304,12 @@ app.MapHealthChecks("/health/ready"); // readiness: include registered checks
 app.MapHealthChecks("/health"); // backward compatibility
 
 await EnsureDatabaseReadyAsync(app);
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    Log.Warning("Application stopping.");
+    Log.CloseAndFlush();
+});
 
 if (storageQueueFallbackReason is not null)
 {

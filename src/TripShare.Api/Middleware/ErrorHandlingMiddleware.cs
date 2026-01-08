@@ -20,6 +20,19 @@ public sealed class ErrorHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException ex)
+        {
+            _log.LogWarning(
+                ex,
+                "Request canceled (method={Method}, path={Path}, trace={TraceId}).",
+                context.Request.Method,
+                context.Request.Path,
+                context.TraceIdentifier);
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 499;
+            }
+        }
         catch (UnauthorizedAccessException)
         {
             context.Response.StatusCode = (int)HttpStatusCode.Forbidden;

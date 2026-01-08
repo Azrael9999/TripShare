@@ -28,6 +28,22 @@ public sealed class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponse>> PasswordLogin([FromBody] PasswordLoginRequest req, CancellationToken ct)
         => Ok(await _auth.PasswordLoginAsync(req, ct));
 
+    [HttpPost("password/reset/request")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult> RequestPasswordReset([FromBody] PasswordResetRequest req, CancellationToken ct)
+    {
+        await _auth.RequestPasswordResetAsync(req, ct);
+        return Accepted();
+    }
+
+    [HttpPost("password/reset/confirm")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult> ConfirmPasswordReset([FromBody] PasswordResetConfirm req, CancellationToken ct)
+    {
+        await _auth.ConfirmPasswordResetAsync(req, ct);
+        return NoContent();
+    }
+
     [HttpPost("refresh")]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshRequest req, CancellationToken ct)

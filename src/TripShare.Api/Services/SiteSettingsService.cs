@@ -13,6 +13,7 @@ public sealed class SiteSettingsService
 
     private const string DriverVerificationRequiredKey = "DriverVerificationRequired";
     private const string AdConfigKey = "AdConfig";
+    private const string BrandingConfigKey = "BrandingConfig";
 
     public SiteSettingsService(AppDbContext db, ILogger<SiteSettingsService> log)
     {
@@ -102,6 +103,51 @@ public sealed class SiteSettingsService
         _log.LogInformation("Ad configuration updated (enabled={Enabled}, slots={Slots})", config.Enabled, config.Slots.Count);
     }
 
+    public async Task<BrandingConfigDto?> GetBrandingConfigAsync(CancellationToken ct = default)
+    {
+        var raw = await _db.SiteSettings.AsNoTracking().Where(x => x.Key == BrandingConfigKey).Select(x => x.Value).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<BrandingConfigDto>(raw);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to parse branding configuration.");
+            return null;
+        }
+    }
+
+    public async Task SetBrandingConfigAsync(BrandingConfigDto config, CancellationToken ct = default)
+    {
+        ValidateBrandingConfig(config);
+        var now = DateTimeOffset.UtcNow;
+        var raw = JsonSerializer.Serialize(NormalizeBranding(config));
+        var setting = await _db.SiteSettings.FirstOrDefaultAsync(x => x.Key == BrandingConfigKey, ct);
+        if (setting is null)
+        {
+            setting = new Domain.Entities.SiteSetting
+            {
+                Key = BrandingConfigKey,
+                Value = raw,
+                UpdatedAt = now
+            };
+            _db.SiteSettings.Add(setting);
+        }
+        else
+        {
+            setting.Value = raw;
+            setting.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        _log.LogInformation("Branding configuration updated.");
+    }
+
     private static void ValidateAdConfiguration(AdConfigurationDto config)
     {
         if (config.FrequencyCapPerSession < 0 || config.FrequencyCapPerSession > 100)
@@ -162,4 +208,24 @@ public sealed class SiteSettingsService
         var slots = config.Slots ?? new List<AdSlotDto>();
         return config with { MaxSlotsPerPage = maxSlots, FrequencyCapPerSession = freq, Slots = slots };
     }
+
+    private static void ValidateBrandingConfig(BrandingConfigDto config)
+    {
+        var maxLen = 200000;
+        if (config.LogoUrl?.Length > maxLen || config.HeroImageUrl?.Length > maxLen ||
+            config.MapOverlayUrl?.Length > maxLen || config.LoginIllustrationUrl?.Length > maxLen)
+        {
+            throw new InvalidOperationException("Branding image payload too large.");
+        }
+    }
+
+    private static BrandingConfigDto NormalizeBranding(BrandingConfigDto config)
+        => new(
+            NormalizeNullable(config.LogoUrl),
+            NormalizeNullable(config.HeroImageUrl),
+            NormalizeNullable(config.MapOverlayUrl),
+            NormalizeNullable(config.LoginIllustrationUrl));
+
+    private static string? NormalizeNullable(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

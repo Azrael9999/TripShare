@@ -76,11 +76,22 @@ Frontend runs on:
   - `ConnectionStrings__DefaultConnection`
   - `Jwt__SigningKey`
   - `Cors__AllowedOrigins__0=http://localhost:5173`
-  - `Sms__Provider` (`TextLk` or `Acs`), `Sms__TextLk:*` or `Sms__Acs:*`
+  - `Sms__Provider` (`TextLk`, `Acs`, or `DevFile`), `Sms__TextLk:*` or `Sms__Acs:*`
   - `Email__Mode` (`DevFile`, `Smtp`, or `Acs`)
   - `BackgroundJobs__Provider` (`StorageQueue` recommended; uses Azurite if `UseDevelopmentStorage=true` — run `azurite --queue` or set `BackgroundJobs__Provider=Sql` to avoid the emulator)
   - `ApplicationInsights__ConnectionString` (optional)
   - `Telemetry__ApiKey` (optional; if set, the web client should set `VITE_TELEMETRY_KEY`)
+
+## Default admin access
+The API seeds a default admin account on startup:
+- **Email/username:** `admin@tripshare.local`
+- **Password:** `TripShareAdmin!2025`
+
+To access the admin dashboard:
+1. Open the web app and sign in with **Email & Password** on `/sign-in`.
+2. Navigate to `/admin` (or use the Admin link in the top navigation).
+
+> Tip: Change the default admin password in production by updating the stored hash/salt or replacing the account.
 
 ### Azure deployment (free-tier by default)
 1) Provision infra with `azure-deploy.bicep`. The template defaults to **Free** tier (App Service plan F1, SQL Basic, in-memory cache, dev-file email) and only deploys paid components (Redis, Communication Services, App Insights ingestion) when you opt in.
@@ -110,7 +121,11 @@ az deployment group create -g tripshare-rg -f azure-deploy.bicep \
 - In dev mode it writes a HTML file under:
   `TripShare.Api/bin/Debug/net8.0/App_Data/dev-emails/` (or the publish folder)
 - Open that file and click the verification link.
-- Once verified, you can create trips and book.
+- Once verified (and your phone number is verified), you can create trips and book.
+
+## Phone verification gate
+- Phone verification is required for creating trips and booking seats.
+- Verify from the **Profile** page (send SMS code and confirm).
 
 ## SMS OTP (Text.lk)
 - Configure `Sms` in `src/TripShare.Api/appsettings*.json` (or environment variables):
@@ -122,6 +137,17 @@ az deployment group create -g tripshare-rg -f azure-deploy.bicep \
   - `POST /api/auth/sms/verify` `{ phoneNumber, otp }`
 - Frontend login modal now supports SMS alongside Google.
 - Driver verification (admin-controlled): enable/disable globally from the Admin dashboard; when enabled, only admin-verified drivers can create trips.
+
+### Local verification testing tips
+- **Email verification & password reset:** set `Email__Mode=DevFile` and open the HTML files written to `TripShare.Api/App_Data/dev-emails`.
+- **Phone verification / SMS OTP:** set `Sms__Provider=DevFile` to write SMS payloads to `TripShare.Api/App_Data/dev-sms`.
+
+## Password reset
+- Request a reset link from `/reset-password` (Email & Password users).
+- The API emails a reset link via the configured email provider.
+
+## Branding (admin-managed)
+- Admins can upload the logo, hero banner, map overlay, and login illustration from the Admin dashboard.
 
 ## Ads (non-invasive, configurable)
 Ads are controlled centrally via the admin UI and enforced on both server and client:

@@ -20,6 +20,7 @@ public sealed class SmsSenderRouter : ISmsSender
         var provider = (_cfg["Sms:Provider"] ?? "TextLk").ToLowerInvariant();
         ISmsSender sender = provider switch
         {
+            "devfile" => _provider.GetRequiredService<DevFileSmsSender>(),
             "acs" => _provider.GetRequiredService<AcsSmsSender>(),
             "textlk" => _provider.GetRequiredService<TextLkSmsSender>(),
             _ => _provider.GetRequiredService<TextLkSmsSender>()

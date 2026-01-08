@@ -55,6 +55,45 @@
         <p v-if="settingsErr" class="text-sm text-red-600 mt-2">{{ settingsErr }}</p>
       </div>
 
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="font-semibold">Branding assets</div>
+            <p class="text-sm text-slate-600 mt-1">Upload logos and banners used across the site.</p>
+          </div>
+          <button class="btn-primary" :disabled="brandingSaving" @click="saveBranding">
+            <span v-if="brandingSaving">Saving…</span>
+            <span v-else>Save branding</span>
+          </button>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <div class="text-xs text-slate-600">Logo</div>
+            <img v-if="branding.logoUrl" :src="branding.logoUrl" class="h-12 object-contain rounded-xl border border-slate-100 bg-white p-2" />
+            <input type="file" accept="image/*" class="input" @change="onBrandFile('logoUrl', $event)" />
+          </div>
+          <div class="space-y-2">
+            <div class="text-xs text-slate-600">Hero banner</div>
+            <img v-if="branding.heroImageUrl" :src="branding.heroImageUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
+            <input type="file" accept="image/*" class="input" @change="onBrandFile('heroImageUrl', $event)" />
+          </div>
+          <div class="space-y-2">
+            <div class="text-xs text-slate-600">Map overlay</div>
+            <img v-if="branding.mapOverlayUrl" :src="branding.mapOverlayUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
+            <input type="file" accept="image/*" class="input" @change="onBrandFile('mapOverlayUrl', $event)" />
+          </div>
+          <div class="space-y-2">
+            <div class="text-xs text-slate-600">Login illustration</div>
+            <img v-if="branding.loginIllustrationUrl" :src="branding.loginIllustrationUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
+            <input type="file" accept="image/*" class="input" @change="onBrandFile('loginIllustrationUrl', $event)" />
+          </div>
+        </div>
+
+        <p v-if="brandingMsg" class="text-sm text-emerald-700 mt-3">{{ brandingMsg }}</p>
+        <p v-if="brandingErr" class="text-sm text-red-600 mt-3">{{ brandingErr }}</p>
+      </div>
+
       <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-2">
           <div class="font-semibold">Suspend / unsuspend user</div>
@@ -131,6 +170,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { http } from '../../lib/api'
+import { applyBrandingConfig, type BrandingConfig } from '../../lib/branding'
 import AdSlot from '../../components/AdSlot.vue'
 
 const metrics = ref<any|null>(null)
@@ -148,6 +188,10 @@ const verifyErr = ref('')
 const incidents = ref<any[]>([])
 const incidentsLoading = ref(false)
 const incidentsErr = ref('')
+const branding = ref<BrandingConfig>({})
+const brandingSaving = ref(false)
+const brandingMsg = ref('')
+const brandingErr = ref('')
 
 const cards = computed(() => {
   const m = metrics.value ?? {}
@@ -166,6 +210,7 @@ async function load() {
   ])
   metrics.value = metricsResp.data
   driverVerificationRequired.value = !!settingsResp.data?.driverVerificationRequired
+  await loadBranding()
   await loadIncidents()
 }
 load()
@@ -180,6 +225,41 @@ async function toggleDriverVerification() {
     settingsMsg.value = `Driver verification requirement ${newVal ? 'enabled' : 'disabled'}.`
   } catch (e:any) {
     settingsErr.value = e?.response?.data?.message ?? 'Failed to update setting.'
+  }
+}
+
+async function loadBranding() {
+  try {
+    const resp = await http.get<BrandingConfig | null>('/admin/branding')
+    branding.value = resp.data ?? {}
+  } catch {
+    branding.value = {}
+  }
+}
+
+function onBrandFile(key: keyof BrandingConfig, event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    branding.value = { ...branding.value, [key]: String(reader.result) }
+  }
+  reader.readAsDataURL(file)
+}
+
+async function saveBranding() {
+  brandingMsg.value = ''
+  brandingErr.value = ''
+  brandingSaving.value = true
+  try {
+    await http.post('/admin/branding', branding.value)
+    applyBrandingConfig(branding.value)
+    brandingMsg.value = 'Branding updated.'
+  } catch (e:any) {
+    brandingErr.value = e?.response?.data?.message ?? 'Failed to update branding.'
+  } finally {
+    brandingSaving.value = false
   }
 }
 

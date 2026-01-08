@@ -3,6 +3,8 @@ namespace TripShare.Application.Contracts;
 public sealed record GoogleLoginRequest(string IdToken, string? DeviceToken, string? Timezone, string? Locale);
 public sealed record PasswordRegisterRequest(string Email, string Password, string DisplayName, string? Timezone, string? Locale);
 public sealed record PasswordLoginRequest(string Email, string Password, string? Timezone, string? Locale);
+public sealed record PasswordResetRequest(string Email);
+public sealed record PasswordResetConfirm(string Token, string NewPassword);
 
 public sealed record AuthResponse(
     string AccessToken,

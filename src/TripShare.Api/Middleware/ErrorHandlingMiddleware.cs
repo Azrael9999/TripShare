@@ -20,6 +20,10 @@ public sealed class ErrorHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            _log.LogDebug("Request aborted by client.");
+        }
         catch (UnauthorizedAccessException)
         {
             context.Response.StatusCode = (int)HttpStatusCode.Forbidden;

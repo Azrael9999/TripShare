@@ -100,7 +100,7 @@ public sealed class AuthService
         // If not verified, send verification email (app-level)
         if (!user.EmailVerified)
         {
-            await SendVerificationEmailInternalAsync(user, ct);
+            await TrySendVerificationEmailAsync(user, ct);
         }
 
         return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
@@ -132,7 +132,7 @@ public sealed class AuthService
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
 
-        await SendVerificationEmailInternalAsync(user, ct);
+        await TrySendVerificationEmailAsync(user, ct);
         return await PasswordLoginAsync(new PasswordLoginRequest(email, req.Password, req.Timezone, req.Locale), ct);
     }
 
@@ -168,7 +168,7 @@ public sealed class AuthService
         await _db.SaveChangesAsync(ct);
 
         if (!user.EmailVerified)
-            await SendVerificationEmailInternalAsync(user, ct);
+            await TrySendVerificationEmailAsync(user, ct);
 
         return new AuthResponse(access, refresh, RequiresEmailVerification: !user.EmailVerified, IsSuspended: false, Me(user));
     }
@@ -281,7 +281,7 @@ public sealed class AuthService
         if (user.IsSuspended)
             throw new InvalidOperationException("Account is suspended.");
         if (user.EmailVerified) return;
-        await SendVerificationEmailInternalAsync(user, ct);
+        await TrySendVerificationEmailAsync(user, ct);
     }
 
     public async Task VerifyEmailAsync(string token, CancellationToken ct)
@@ -497,6 +497,18 @@ public sealed class AuthService
 
         await _email.SendAsync(user.Email, "Verify your HopTrip email", body, ct);
         _log.LogInformation("Verification email queued for {Email}", user.Email);
+    }
+
+    private async Task TrySendVerificationEmailAsync(User user, CancellationToken ct)
+    {
+        try
+        {
+            await SendVerificationEmailInternalAsync(user, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to send verification email for user {UserId}", user.Id);
+        }
     }
 
     public async Task UpdateProfileAsync(Guid userId, UpdateProfileRequest req, CancellationToken ct)

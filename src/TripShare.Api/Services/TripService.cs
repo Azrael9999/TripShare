@@ -129,63 +129,69 @@ public sealed class TripService
 
     public async Task<PagedResult<TripSummaryDto>> SearchAsync(SearchTripsRequest req, CancellationToken ct)
     {
-        var cacheKey = $"search:{req.Query}:{req.FromUtc}:{req.ToUtc}:{req.MaxPricePerSeat}:{req.MinDriverRating}:{req.VerifiedDriversOnly}:{req.Page}:{req.PageSize}";
-        if (_cache.TryGetValue<PagedResult<TripSummaryDto>>(cacheKey, out var cached) && cached is not null)
-        {
-            return cached;
-        }
-
-        var q = _db.Trips
-            .AsNoTracking()
-            .Include(x => x.Driver)
-            .Include(x => x.RoutePoints)
-            .Include(x => x.Segments)
-            .Where(x => x.IsPublic);
-
-
-        // Extra filters
-        if (req.VerifiedDriversOnly)
-            q = q.Where(x =>
-                x.Driver != null &&
-                !x.Driver.IsSuspended &&
-                x.Driver.EmailVerified &&
-                (x.Driver.DriverVerified || x.Driver.IdentityVerified));
-
-        if (req.MaxPricePerSeat is not null)
-        {
-            var max = req.MaxPricePerSeat.Value;
-            q = q.Where(x => x.Segments.Sum(s => s.Price) <= max);
-        }
-
-        if (req.MinDriverRating is not null)
-        {
-            var min = req.MinDriverRating.Value;
-            q = q.Where(x => _db.Ratings.Where(r => r.ToUserId == x.DriverId).Average(r => (decimal?)r.Stars) >= min);
-        }
-
-
-        if (req.FromUtc is not null) q = q.Where(x => x.DepartureTimeUtc >= req.FromUtc.Value);
-        if (req.ToUtc is not null) q = q.Where(x => x.DepartureTimeUtc <= req.ToUtc.Value);
-
-        if (!string.IsNullOrWhiteSpace(req.Query))
-        {
-            var term = req.Query.Trim();
-            q = q.Where(x => x.RoutePoints.Any(rp => rp.DisplayAddress.Contains(term)));
-        }
-
-        var total = await q.LongCountAsync(ct);
         var page = Math.Max(1, req.Page);
         var size = Math.Clamp(req.PageSize, 1, 50);
 
-        var items = await q
-            .OrderBy(x => x.DepartureTimeUtc)
-            .Skip((page - 1) * size)
-            .Take(size)
-            .ToListAsync(ct);
+        try
+        {
+            var cacheKey = $"search:{req.Query}:{req.FromUtc}:{req.ToUtc}:{req.MaxPricePerSeat}:{req.MinDriverRating}:{req.VerifiedDriversOnly}:{page}:{size}";
+            if (_cache.TryGetValue<PagedResult<TripSummaryDto>>(cacheKey, out var cached) && cached is not null)
+            {
+                return cached;
+            }
 
-        var result = new PagedResult<TripSummaryDto>(items.Select(Map).ToList(), page, size, total);
-        _cache.Set(cacheKey, result, TimeSpan.FromSeconds(30));
-        return result;
+            var q = _db.Trips
+                .AsNoTracking()
+                .Include(x => x.Driver)
+                .Include(x => x.RoutePoints)
+                .Include(x => x.Segments)
+                .Where(x => x.IsPublic);
+
+            // Extra filters
+            if (req.VerifiedDriversOnly)
+                q = q.Where(x =>
+                    x.Driver != null &&
+                    !x.Driver.IsSuspended &&
+                    x.Driver.EmailVerified &&
+                    (x.Driver.DriverVerified || x.Driver.IdentityVerified));
+
+            if (req.MaxPricePerSeat is not null)
+            {
+                var max = req.MaxPricePerSeat.Value;
+                q = q.Where(x => x.Segments.Sum(s => s.Price) <= max);
+            }
+
+            if (req.MinDriverRating is not null)
+            {
+                var min = req.MinDriverRating.Value;
+                q = q.Where(x => _db.Ratings.Where(r => r.ToUserId == x.DriverId).Average(r => (decimal?)r.Stars) >= min);
+            }
+
+            if (req.FromUtc is not null) q = q.Where(x => x.DepartureTimeUtc >= req.FromUtc.Value);
+            if (req.ToUtc is not null) q = q.Where(x => x.DepartureTimeUtc <= req.ToUtc.Value);
+
+            if (!string.IsNullOrWhiteSpace(req.Query))
+            {
+                var term = req.Query.Trim();
+                q = q.Where(x => x.RoutePoints.Any(rp => rp.DisplayAddress.Contains(term)));
+            }
+
+            var total = await q.LongCountAsync(ct);
+            var items = await q
+                .OrderBy(x => x.DepartureTimeUtc)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToListAsync(ct);
+
+            var result = new PagedResult<TripSummaryDto>(items.Select(Map).ToList(), page, size, total);
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(30));
+            return result;
+        }
+        catch (OperationCanceledException ex)
+        {
+            _log.LogWarning(ex, "Trip search canceled.");
+            return new PagedResult<TripSummaryDto>(new List<TripSummaryDto>(), page, size, 0);
+        }
     }
 
     public async Task<PagedResult<TripSummaryDto>> MyTripsAsync(Guid driverId, int page, int pageSize, CancellationToken ct)

@@ -22,7 +22,12 @@ public sealed class ErrorHandlingMiddleware
         }
         catch (OperationCanceledException ex)
         {
-            _log.LogDebug(ex, "Request was canceled.");
+            _log.LogWarning(
+                ex,
+                "Request canceled (method={Method}, path={Path}, trace={TraceId}).",
+                context.Request.Method,
+                context.Request.Path,
+                context.TraceIdentifier);
             if (!context.Response.HasStarted)
             {
                 context.Response.StatusCode = 499;

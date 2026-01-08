@@ -305,6 +305,12 @@ app.MapHealthChecks("/health"); // backward compatibility
 
 await EnsureDatabaseReadyAsync(app);
 
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    Log.Warning("Application stopping.");
+    Log.CloseAndFlush();
+});
+
 if (storageQueueFallbackReason is not null)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();

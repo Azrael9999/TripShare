@@ -20,9 +20,13 @@ public sealed class ErrorHandlingMiddleware
         {
             await _next(context);
         }
-        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        catch (OperationCanceledException ex)
         {
-            _log.LogDebug("Request aborted by client.");
+            _log.LogDebug(ex, "Request was canceled.");
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 499;
+            }
         }
         catch (UnauthorizedAccessException)
         {

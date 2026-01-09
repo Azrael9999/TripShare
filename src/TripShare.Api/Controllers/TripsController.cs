@@ -127,11 +127,18 @@ public sealed class TripsController : ControllerBase
         Response.Headers["X-Accel-Buffering"] = "no";
         Response.ContentType = "text/event-stream";
 
-        await foreach (var update in _trips.StreamLocationsAsync(User.GetUserId(), id, ct))
+        try
         {
-            await Response.WriteAsync($"event: location\n", ct);
-            await Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(update)}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
+            await foreach (var update in _trips.StreamLocationsAsync(User.GetUserId(), id, ct))
+            {
+                await Response.WriteAsync($"event: location\n", ct);
+                await Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(update)}\n\n", ct);
+                await Response.Body.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Client disconnected or request canceled; ignore to avoid noisy logs.
         }
     }
 }

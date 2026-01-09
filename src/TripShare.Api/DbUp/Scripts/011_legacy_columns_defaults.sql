@@ -18,6 +18,21 @@ BEGIN
     END
 END
 
+-- Legacy Trips.SeatsAvailable column (superseded by SeatsTotal)
+IF COL_LENGTH('dbo.Trips', 'SeatsAvailable') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM sys.default_constraints dc
+        JOIN sys.columns c ON c.default_object_id = dc.object_id
+        WHERE dc.parent_object_id = OBJECT_ID('dbo.Trips')
+          AND c.name = 'SeatsAvailable'
+    )
+    BEGIN
+        ALTER TABLE dbo.Trips ADD CONSTRAINT DF_Trips_SeatsAvailable DEFAULT(0) FOR SeatsAvailable;
+    END
+END
+
 -- TripRoutePoints.CreatedAt should default to now for legacy rows
 IF COL_LENGTH('dbo.TripRoutePoints', 'CreatedAt') IS NOT NULL
 BEGIN

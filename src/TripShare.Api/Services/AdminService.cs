@@ -26,7 +26,7 @@ public sealed class AdminService
         return new { users, activeTrips, bookings30d, reportsOpen, nowUtc = now };
     }
 
-    public async Task SuspendUserAsync(Guid userId, bool suspend, CancellationToken ct = default)
+    public async Task SuspendUserAsync(Guid userId, bool suspend, string note, CancellationToken ct = default)
     {
         var u = await _db.Users.FirstOrDefaultAsync(x => x.Id == userId, ct);
         if (u == null) return;
@@ -35,18 +35,19 @@ public sealed class AdminService
             return;
         }
         u.IsSuspended = suspend;
+        u.SuspensionNote = note;
+        u.SuspensionUpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task HideTripAsync(Guid tripId, bool hide, CancellationToken ct = default)
+    public async Task HideTripAsync(Guid tripId, bool hide, string note, CancellationToken ct = default)
     {
         var t = await _db.Trips.FirstOrDefaultAsync(x => x.Id == tripId, ct);
         if (t == null) return;
         t.IsPublic = !hide;
-        if (hide)
-        {
-            t.UpdatedAt = DateTimeOffset.UtcNow;
-        }
+        t.VisibilityNote = note;
+        t.VisibilityUpdatedAt = DateTimeOffset.UtcNow;
+        t.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
     }
 
@@ -120,6 +121,52 @@ public sealed class AdminService
         }
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<List<DriverSearchResult>> SearchDriversAsync(string query, CancellationToken ct = default)
+    {
+        var trimmed = query.Trim();
+        var like = $"%{trimmed}%";
+        var drivers = _db.Users.AsNoTracking()
+            .Include(x => x.Vehicle)
+            .Where(x => x.IsDriver || x.Vehicle != null);
+
+        if (Guid.TryParse(trimmed, out var id))
+        {
+            drivers = drivers.Where(x => x.Id == id);
+        }
+        else
+        {
+            drivers = drivers.Where(x =>
+                (x.Email != null && EF.Functions.Like(x.Email, like)) ||
+                (x.DisplayName != null && EF.Functions.Like(x.DisplayName, like)) ||
+                (x.PhoneNumber != null && EF.Functions.Like(x.PhoneNumber, like)) ||
+                (x.Vehicle != null && (
+                    (x.Vehicle.Make != null && EF.Functions.Like(x.Vehicle.Make, like)) ||
+                    (x.Vehicle.Model != null && EF.Functions.Like(x.Vehicle.Model, like)) ||
+                    (x.Vehicle.Color != null && EF.Functions.Like(x.Vehicle.Color, like)) ||
+                    (x.Vehicle.PlateNumber != null && EF.Functions.Like(x.Vehicle.PlateNumber, like))
+                ))
+            );
+        }
+
+        return await drivers
+            .OrderBy(x => x.DisplayName)
+            .ThenBy(x => x.Email)
+            .Select(x => new DriverSearchResult(
+                x.Id,
+                x.DisplayName,
+                x.Email,
+                x.PhoneNumber,
+                x.Vehicle == null
+                    ? null
+                    : (x.Vehicle.Make ?? "")
+                        + (x.Vehicle.Model == null ? "" : $" {x.Vehicle.Model}")
+                        + (x.Vehicle.Color == null ? "" : $" {x.Vehicle.Color}")
+                        + (x.Vehicle.PlateNumber == null ? "" : $" {x.Vehicle.PlateNumber}")
+            ))
+            .Take(10)
+            .ToListAsync(ct);
     }
 
     private static (string hash, string salt) HashPassword(string password)

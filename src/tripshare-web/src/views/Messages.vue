@@ -14,8 +14,8 @@
       <div class="card p-5 space-y-3">
         <div class="text-sm font-semibold">Start a thread</div>
         <label class="text-xs text-slate-600">Booking ID</label>
-        <input v-model="newBookingId" class="input mt-1" placeholder="Booking GUID" />
-        <p v-if="newBookingId && !isGuid(newBookingId)" class="text-xs text-red-600">Enter a valid GUID.</p>
+        <input v-model="newBookingId" class="input mt-1" placeholder="Booking ID" />
+        <p v-if="newBookingId && !isGuid(newBookingId)" class="text-xs text-red-600">Enter a valid ID.</p>
         <button class="btn-primary w-full" :disabled="creatingThread || !isGuid(newBookingId)" @click="createThread">
           <span v-if="creatingThread">Creating…</span>
           <span v-else>Create thread</span>

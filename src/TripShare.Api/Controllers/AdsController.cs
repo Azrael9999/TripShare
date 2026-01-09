@@ -35,7 +35,10 @@ public sealed class AdsController : ControllerBase
             config.Enabled,
             config.FrequencyCapPerSession,
             config.MaxSlotsPerPage,
-            config.Slots.Where(s => s.Enabled).ToList());
+            config.Slots.Where(s => s.Enabled).ToList(),
+            config.GoogleAdsClientId,
+            config.GoogleAdsScriptUrl,
+            config.GoogleAdsSlotId);
         return Ok(filtered);
     }
 

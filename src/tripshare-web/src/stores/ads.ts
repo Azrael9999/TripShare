@@ -3,7 +3,15 @@ import { http } from '../lib/api'
 import { telemetryClient } from '../lib/telemetryClient'
 
 type AdSlot = { slot: string; html: string; enabled: boolean }
-type AdConfig = { enabled: boolean; frequencyCapPerSession: number; maxSlotsPerPage: number; slots: AdSlot[] }
+type AdConfig = {
+  enabled: boolean
+  frequencyCapPerSession: number
+  maxSlotsPerPage: number
+  slots: AdSlot[]
+  googleAdsClientId?: string | null
+  googleAdsScriptUrl?: string | null
+  googleAdsSlotId?: string | null
+}
 
 const SESSION_KEY = 'tripshare.ads.session'
 const SESSION_ID_KEY = 'tripshare.ads.sessionId'

@@ -19,9 +19,15 @@
       </div>
 
       <div class="card p-6 space-y-6">
-        <div>
-          <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Google</p>
-          <GoogleSignIn @success="onGoogleSuccess" />
+        <div class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500">Google sign-in</p>
+              <p class="text-sm text-slate-600">Continue with Google to access your account faster.</p>
+            </div>
+            <GoogleSignIn @success="onGoogleSuccess" />
+          </div>
+          <p v-if="googleError" class="text-sm text-red-600 mt-3">{{ googleError }}</p>
         </div>
 
         <div class="border-t border-slate-100 pt-4 space-y-4">
@@ -112,6 +118,7 @@ const isRegister = ref(false)
 const passwordLoading = ref(false)
 const passwordError = ref('')
 const passwordNote = ref('')
+const googleError = ref('')
 const normalizedPhone = computed(() => smsPhone.value.trim())
 const isValidSriLankaPhone = computed(() => isLkPhone(normalizedPhone.value))
 const brandLoginIllustration = computed(() => (hasImage(brandConfig.loginIllustrationUrl) ? brandConfig.loginIllustrationUrl : ''))
@@ -121,8 +128,13 @@ function redirectHome() {
 }
 
 async function onGoogleSuccess(idToken: string) {
-  await auth.googleLogin(idToken)
-  redirectHome()
+  googleError.value = ''
+  try {
+    await auth.googleLogin(idToken)
+    redirectHome()
+  } catch (err: any) {
+    googleError.value = err?.response?.data?.message ?? 'Unable to sign in with Google.'
+  }
 }
 
 async function submitPassword() {

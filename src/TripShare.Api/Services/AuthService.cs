@@ -42,12 +42,37 @@ public sealed class AuthService
     public async Task<AuthResponse> GoogleLoginAsync(GoogleLoginRequest req, CancellationToken ct)
     {
         var clientId = _cfg["Auth:Google:ClientId"] ?? throw new InvalidOperationException("Auth:Google:ClientId missing");
-        var payload = await _google.ValidateAsync(req.IdToken, clientId, ct);
+        GoogleTokenPayload payload;
+        try
+        {
+            payload = await _google.ValidateAsync(req.IdToken, clientId, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _log.LogWarning(ex, "Google login failed.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Unexpected Google login failure.");
+            throw new InvalidOperationException("Google sign-in failed. Please try again.");
+        }
 
         var user = await _db.Users.SingleOrDefaultAsync(x => x.AuthProvider == "google" && x.ProviderUserId == payload.Sub, ct);
         if (user is null)
         {
             user = await _db.Users.SingleOrDefaultAsync(x => x.Email == payload.Email, ct);
+        }
+
+        if (user is not null && user.Role == "admin")
+        {
+            _log.LogWarning("Admin account attempted Google sign-in. Email={Email}", user.Email);
+            throw new InvalidOperationException("Google sign-in is only available for user accounts.");
+        }
+        if (user is null && payload.Email.Equals(DefaultAdminEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            _log.LogWarning("Default admin email attempted Google sign-in. Email={Email}", payload.Email);
+            throw new InvalidOperationException("Google sign-in is only available for user accounts.");
         }
 
         if (user is null)
@@ -59,6 +84,7 @@ public sealed class AuthService
                 PhotoUrl = payload.Picture,
                 AuthProvider = "google",
                 ProviderUserId = payload.Sub,
+                Role = "user",
                 EmailVerified = false // app-level verification gate
             };
             _db.Users.Add(user);
@@ -146,6 +172,8 @@ public sealed class AuthService
         if (!VerifyPassword(req.Password, user.PasswordHash, user.PasswordSalt))
             throw new InvalidOperationException("Invalid credentials.");
 
+        if (user.Role == "admin" && !user.AdminApproved)
+            throw new InvalidOperationException("Admin access is not approved.");
         if (user.IsSuspended)
             return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
         EnsureActive(user);
@@ -325,6 +353,10 @@ public sealed class AuthService
             };
             _db.Users.Add(user);
         }
+        else if (user.Role == "admin")
+        {
+            throw new InvalidOperationException("Admins must sign in with email and password.");
+        }
         else if (user.IsSuspended)
         {
             throw new InvalidOperationException("Account is suspended.");
@@ -443,6 +475,8 @@ public sealed class AuthService
         token.UsedAt = DateTimeOffset.UtcNow;
 
         var user = token.User;
+        if (user.Role == "admin")
+            throw new InvalidOperationException("Admins must sign in with email and password.");
         if (user.IsSuspended)
             throw new InvalidOperationException("Account is suspended.");
         EnsureActive(user);

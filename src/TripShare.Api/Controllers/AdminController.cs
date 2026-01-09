@@ -21,6 +21,8 @@ public sealed record AdminUpsertRequest(string Email, string? DisplayName, strin
 
 public sealed record DriverSearchResult(Guid Id, string? DisplayName, string? Email, string? PhoneNumber, string? VehicleSummary);
 
+public sealed record DriverVerificationGateRequest(bool Required);
+
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "admin,superadmin")]
@@ -92,16 +94,16 @@ public sealed class AdminController : ControllerBase
 
     [HttpPost("settings/driver-verification")]
     [Authorize(Roles = "superadmin")]
-    public async Task<IActionResult> SetDriverVerification([FromBody] bool required, CancellationToken ct)
+    public async Task<IActionResult> SetDriverVerification([FromBody] DriverVerificationGateRequest req, CancellationToken ct)
     {
         try
         {
-            await _settings.SetDriverVerificationRequiredAsync(required, ct);
+            await _settings.SetDriverVerificationRequiredAsync(req.Required, ct);
             return NoContent();
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Failed to update driver verification requirement to {Required}.", required);
+            _log.LogError(ex, "Failed to update driver verification requirement to {Required}.", req.Required);
             return BadRequest(new { message = "Failed to update setting." });
         }
     }

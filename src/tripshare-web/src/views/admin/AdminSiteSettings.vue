@@ -223,7 +223,7 @@ async function toggleDriverVerification() {
   settingsSaving.value = true
   try {
     const newVal = !driverVerificationRequired.value
-    await http.post('/admin/settings/driver-verification', newVal)
+    await http.post('/admin/settings/driver-verification', { required: newVal })
     driverVerificationRequired.value = newVal
     settingsMsg.value = `Driver verification requirement ${newVal ? 'enabled' : 'disabled'}.`
   } catch (e:any) {

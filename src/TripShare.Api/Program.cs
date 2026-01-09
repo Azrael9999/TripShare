@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Data.SqlClient;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Enrichers.CorrelationId;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
@@ -137,7 +138,36 @@ builder.Services.AddSingleton<SqlConnectionHealthCheck>(sp =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(opt =>
+{
+    opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = JwtBearerDefaults.AuthenticationScheme,
+        BearerFormat = "JWT"
+    });
+
+    opt.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                In = ParameterLocation.Header,
+                Name = "Bearer",
+                Scheme = JwtBearerDefaults.AuthenticationScheme
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 builder.Services.AddHttpClient();
 

@@ -20,4 +20,6 @@ public sealed class TripRoutePoint
     public double Lng { get; set; }
     public string DisplayAddress { get; set; } = "";
     public string? PlaceId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

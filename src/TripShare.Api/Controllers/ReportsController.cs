@@ -35,12 +35,12 @@ public sealed class ReportsController : ControllerBase
         return Ok(await _reports.CreateAsync(r, ct));
     }
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Roles = "admin,superadmin")]
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] ReportStatus? status = null, [FromQuery] int take = 100, CancellationToken ct = default)
         => Ok(await _reports.ListAsync(status, take, ct));
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Roles = "admin,superadmin")]
     [HttpPost("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateReportRequest req, CancellationToken ct)
     {

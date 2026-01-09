@@ -34,7 +34,7 @@ BEGIN
         'admin@tripshare.local',
         0,
         0,
-        'admin',
+        'superadmin',
         SYSDATETIMEOFFSET(),
         NULL,
         'fGx5yBUPxt/JJ1pjBChDHTn3XPA/WdgvMosfRtG5iDI=',
@@ -44,7 +44,7 @@ END
 ELSE
 BEGIN
     UPDATE dbo.Users
-    SET Role = 'admin',
+    SET Role = 'superadmin',
         AuthProvider = 'password',
         ProviderUserId = 'admin@tripshare.local',
         PasswordHash = 'fGx5yBUPxt/JJ1pjBChDHTn3XPA/WdgvMosfRtG5iDI=',

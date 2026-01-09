@@ -27,7 +27,6 @@
         <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
-        <RouterLink v-if="auth.isAuthenticated && auth.me?.role==='admin'" to="/admin" class="btn-ghost">Admin</RouterLink>
       </nav>
 
       <div class="flex items-center gap-2">

@@ -196,7 +196,10 @@ public sealed class SafetyService
 
     private async Task NotifyAdminsAsync(Guid? tripId, Guid? bookingId, string summary, CancellationToken ct)
     {
-        var adminIds = await _db.Users.AsNoTracking().Where(x => x.Role == "admin").Select(x => x.Id).ToListAsync(ct);
+        var adminIds = await _db.Users.AsNoTracking()
+            .Where(x => x.Role == "admin" || x.Role == "superadmin")
+            .Select(x => x.Id)
+            .ToListAsync(ct);
         foreach (var adminId in adminIds)
         {
             await _notifications.CreateAsync(adminId, NotificationType.SafetyAlert, "Safety incident escalated", summary, tripId, bookingId, ct);

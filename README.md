@@ -82,16 +82,31 @@ Frontend runs on:
   - `ApplicationInsights__ConnectionString` (optional)
   - `Telemetry__ApiKey` (optional; if set, the web client should set `VITE_TELEMETRY_KEY`)
 
-## Default admin access
-The API seeds a default admin account on startup:
+## Default admin (super admin) access
+The API seeds a default super admin account on startup:
 - **Email/username:** `admin@tripshare.local`
 - **Password:** `TripShareAdmin!2025`
 
-To access the admin dashboard:
-1. Open the web app and sign in with **Email & Password** on `/sign-in`.
-2. Navigate to `/admin` (or use the Admin link in the top navigation).
+Admin accounts can **only** sign in with email and password (Google/SMS sign-in is blocked). To access the admin dashboard, open the web app and sign in on `/admin-login`, then navigate to `/admin`. The admin login route is not shown in user navigation and should be shared only with admins.
 
 > Tip: Change the default admin password in production by updating the stored hash/salt or replacing the account.
+
+### Approving additional admins
+Only approved admin accounts can sign in. The super admin can manage admin accounts via the **Admin access** panel in `/admin/admins`.
+
+To manage accounts directly in SQL (optional):
+1. Create or reset the admin account with email/password credentials in `dbo.Users` (role must be `admin`).
+2. Set `AdminApproved = 1` for that email.
+
+Example SQL (adjust email):
+```sql
+UPDATE dbo.Users
+SET Role = 'admin',
+    AuthProvider = 'password',
+    ProviderUserId = Email,
+    AdminApproved = 1
+WHERE Email = 'other-admin@example.com';
+```
 
 ### Azure deployment (free-tier by default)
 1) Provision infra with `azure-deploy.bicep`. The template defaults to **Free** tier (App Service plan F1, SQL Basic, in-memory cache, dev-file email) and only deploys paid components (Redis, Communication Services, App Insights ingestion) when you opt in.

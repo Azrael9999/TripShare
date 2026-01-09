@@ -17,7 +17,7 @@ export type Me = {
   verified?: boolean
 }
 
-type Role = 'user' | 'admin'
+type Role = 'user' | 'admin' | 'superadmin'
 
 type AuthResponse = {
   accessToken: string
@@ -45,7 +45,7 @@ export const useAuthStore = defineStore('auth', {
     },
     normalizeMe(raw: any): Me {
       const rawRole = (raw?.role ?? '').toString().toLowerCase()
-      const role: Role = rawRole === 'admin' ? 'admin' : 'user'
+      const role: Role = rawRole === 'superadmin' ? 'superadmin' : rawRole === 'admin' ? 'admin' : 'user'
       return {
         ...raw,
         role,

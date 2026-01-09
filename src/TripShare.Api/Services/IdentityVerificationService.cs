@@ -38,7 +38,10 @@ public sealed class IdentityVerificationService
         _db.IdentityVerificationRequests.Add(req);
         await _db.SaveChangesAsync(ct);
 
-        var admins = await _db.Users.AsNoTracking().Where(x => x.Role == "admin").Select(x => x.Id).ToListAsync(ct);
+        var admins = await _db.Users.AsNoTracking()
+            .Where(x => x.Role == "admin" || x.Role == "superadmin")
+            .Select(x => x.Id)
+            .ToListAsync(ct);
         foreach (var admin in admins)
         {
             await _notifications.CreateAsync(admin, NotificationType.IdentityVerification, "Identity verification submitted", $"User {userId} submitted verification details.", null, null, ct);

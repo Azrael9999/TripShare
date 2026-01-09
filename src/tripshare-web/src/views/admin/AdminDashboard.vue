@@ -36,6 +36,16 @@
         </div>
       </div>
 
+      <div v-if="isSuperAdmin" class="card p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-semibold">Admin access</div>
+            <p class="text-sm text-slate-600 mt-1">Create and approve admin accounts.</p>
+          </div>
+          <RouterLink to="/admin/admins" class="btn-outline">Manage admins</RouterLink>
+        </div>
+      </div>
+
       <div class="card p-5">
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -172,6 +182,7 @@ import { computed, ref } from 'vue'
 import { http } from '../../lib/api'
 import { applyBrandingConfig, type BrandingConfig } from '../../lib/branding'
 import AdSlot from '../../components/AdSlot.vue'
+import { useAuthStore } from '../../stores/auth'
 
 const metrics = ref<any|null>(null)
 const driverVerificationRequired = ref(false)
@@ -192,6 +203,8 @@ const branding = ref<BrandingConfig>({})
 const brandingSaving = ref(false)
 const brandingMsg = ref('')
 const brandingErr = ref('')
+const auth = useAuthStore()
+const isSuperAdmin = computed(() => auth.me?.role === 'superadmin')
 
 const cards = computed(() => {
   const m = metrics.value ?? {}

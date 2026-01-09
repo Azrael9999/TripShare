@@ -16,6 +16,8 @@ import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import AdminReports from '../views/admin/AdminReports.vue'
 import AdminIdentity from '../views/admin/AdminIdentity.vue'
 import AdminAds from '../views/admin/AdminAds.vue'
+import AdminLogin from '../views/admin/AdminLogin.vue'
+import AdminAccounts from '../views/admin/AdminAccounts.vue'
 import { useAuthStore } from '../stores/auth'
 import { useAdsStore } from '../stores/ads'
 
@@ -31,6 +33,7 @@ const router = createRouter({
     { path: '/messages', component: Messages, meta: { requiresAuth: true, title: 'Messages | HopTrip' } },
     { path: '/profile', component: Profile, meta: { requiresAuth: true, title: 'Profile | HopTrip' } },
     { path: '/sign-in', component: SignIn, meta: { title: 'Sign in | HopTrip' } },
+    { path: '/admin-login', component: AdminLogin, meta: { title: 'Admin sign in | HopTrip' } },
     { path: '/reset-password', component: ResetPassword, meta: { title: 'Reset password | HopTrip' } },
     { path: '/vehicle', component: Vehicle, meta: { requiresAuth: true, requiresVerified: true, title: 'Vehicle profile | HopTrip' } },
     { path: '/safety', component: Safety, meta: { requiresAuth: true, title: 'Safety | HopTrip' } },
@@ -38,7 +41,8 @@ const router = createRouter({
     { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin | HopTrip' } },
     { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin reports | HopTrip' } },
     { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin identity | HopTrip' } },
-    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | HopTrip' } }
+    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | HopTrip' } },
+    { path: '/admin/admins', component: AdminAccounts, meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Admin accounts | HopTrip' } }
   ]
 })
 
@@ -47,6 +51,9 @@ router.beforeEach(async (to) => {
   if (!auth.initialized) await auth.init()
 
   if ((to.meta as any)?.requiresAuth && !auth.isAuthenticated) {
+    if ((to.meta as any)?.requiresAdmin) {
+      return { path: '/admin-login' }
+    }
     return { path: '/sign-in' }
   }
 
@@ -54,11 +61,24 @@ router.beforeEach(async (to) => {
     return { path: '/' }
   }
 
+  if (to.path === '/admin-login') {
+    if (auth.isAuthenticated && (auth.me?.role === 'admin' || auth.me?.role === 'superadmin')) {
+      return { path: '/admin' }
+    }
+    if (auth.isAuthenticated && auth.me?.role !== 'admin' && auth.me?.role !== 'superadmin') {
+      return { path: '/' }
+    }
+  }
+
   if ((to.meta as any)?.requiresVerified && auth.isAuthenticated && (!auth.me?.emailVerified || !auth.me?.phoneVerified)) {
     return { path: '/profile', query: { verify: '1' } }
   }
 
-  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin') {
+  if ((to.meta as any)?.requiresAdmin && auth.isAuthenticated && auth.me?.role !== 'admin' && auth.me?.role !== 'superadmin') {
+    return { path: '/' }
+  }
+
+  if ((to.meta as any)?.requiresSuperAdmin && auth.isAuthenticated && auth.me?.role !== 'superadmin') {
     return { path: '/' }
   }
 })

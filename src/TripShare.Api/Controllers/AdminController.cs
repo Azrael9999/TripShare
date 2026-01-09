@@ -17,9 +17,11 @@ public sealed record DriverVerificationRequest(bool Verified, string? Note);
 
 public sealed record ResolveIncidentRequest(SafetyIncidentStatus Status, string? Note);
 
+public sealed record AdminUpsertRequest(string Email, string? DisplayName, string? Password, bool Approved);
+
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = "admin")]
+[Authorize(Roles = "admin,superadmin")]
 public sealed class AdminController : ControllerBase
 {
     private readonly AdminService _admin;
@@ -133,6 +135,19 @@ public sealed class AdminController : ControllerBase
     public async Task<IActionResult> ResolveIncident(Guid id, [FromBody] ResolveIncidentRequest req, CancellationToken ct)
     {
         await _safety.ResolveIncidentAsync(id, User.GetUserId(), req.Status, req.Note, ct);
+        return NoContent();
+    }
+
+    [HttpGet("admins")]
+    [Authorize(Roles = "superadmin")]
+    public async Task<IActionResult> ListAdmins(CancellationToken ct)
+        => Ok(await _admin.ListAdminsAsync(ct));
+
+    [HttpPost("admins")]
+    [Authorize(Roles = "superadmin")]
+    public async Task<IActionResult> UpsertAdmin([FromBody] AdminUpsertRequest req, CancellationToken ct)
+    {
+        await _admin.UpsertAdminAsync(req, ct);
         return NoContent();
     }
 

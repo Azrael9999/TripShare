@@ -20,5 +20,8 @@ public static class HttpContextUserExtensions
         => string.Equals(user.Claims.FirstOrDefault(c => c.Type == "pv")?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsAdmin(this ClaimsPrincipal user)
-        => user.IsInRole("admin");
+        => user.IsInRole("admin") || user.IsInRole("superadmin");
+
+    public static bool IsSuperAdmin(this ClaimsPrincipal user)
+        => user.IsInRole("superadmin");
 }

@@ -64,7 +64,7 @@ public sealed class AuthService
             user = await _db.Users.SingleOrDefaultAsync(x => x.Email == payload.Email, ct);
         }
 
-        if (user is not null && user.Role == "admin")
+        if (user is not null && (user.Role == "admin" || user.Role == "superadmin"))
         {
             _log.LogWarning("Admin account attempted Google sign-in. Email={Email}", user.Email);
             throw new InvalidOperationException("Google sign-in is only available for user accounts.");
@@ -172,7 +172,7 @@ public sealed class AuthService
         if (!VerifyPassword(req.Password, user.PasswordHash, user.PasswordSalt))
             throw new InvalidOperationException("Invalid credentials.");
 
-        if (user.Role == "admin" && !user.AdminApproved)
+        if ((user.Role == "admin" || user.Role == "superadmin") && !user.AdminApproved)
             throw new InvalidOperationException("Admin access is not approved.");
         if (user.IsSuspended)
             return new AuthResponse("", "", RequiresEmailVerification: true, IsSuspended: true, Me(user));
@@ -353,7 +353,7 @@ public sealed class AuthService
             };
             _db.Users.Add(user);
         }
-        else if (user.Role == "admin")
+        else if (user.Role == "admin" || user.Role == "superadmin")
         {
             throw new InvalidOperationException("Admins must sign in with email and password.");
         }
@@ -475,7 +475,7 @@ public sealed class AuthService
         token.UsedAt = DateTimeOffset.UtcNow;
 
         var user = token.User;
-        if (user.Role == "admin")
+        if (user.Role == "admin" || user.Role == "superadmin")
             throw new InvalidOperationException("Admins must sign in with email and password.");
         if (user.IsSuspended)
             throw new InvalidOperationException("Account is suspended.");

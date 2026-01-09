@@ -27,6 +27,7 @@ public sealed class User
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public string Role { get; set; } = "user"; // user/admin
+    public bool AdminApproved { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastLoginAt { get; set; }

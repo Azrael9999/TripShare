@@ -221,7 +221,7 @@ builder.Services.AddAuthorization();
 
 // App services
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+builder.Services.AddHttpClient<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
 builder.Services.AddScoped<IEmailSender, EmailSenderFactory>();
 builder.Services.AddSingleton<AcsSmsSender>();
 builder.Services.AddSingleton<TextLkSmsSender>();

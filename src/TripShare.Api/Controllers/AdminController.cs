@@ -9,15 +9,17 @@ using TripShare.Infrastructure.Data;
 
 namespace TripShare.Api.Controllers;
 
-public sealed record SuspendUserRequest(bool Suspend);
+public sealed record SuspendUserRequest(bool Suspend, string? Note);
 
-public sealed record HideTripRequest(bool Hide);
+public sealed record HideTripRequest(bool Hide, string? Note);
 
 public sealed record DriverVerificationRequest(bool Verified, string? Note);
 
 public sealed record ResolveIncidentRequest(SafetyIncidentStatus Status, string? Note);
 
 public sealed record AdminUpsertRequest(string Email, string? DisplayName, string? Password, bool Approved);
+
+public sealed record DriverSearchResult(Guid Id, string? DisplayName, string? Email, string? PhoneNumber, string? VehicleSummary);
 
 [ApiController]
 [Route("api/admin")]
@@ -29,14 +31,16 @@ public sealed class AdminController : ControllerBase
     private readonly AppDbContext _db;
     private readonly SafetyService _safety;
     private readonly IdentityVerificationService _identity;
+    private readonly ILogger<AdminController> _log;
 
-    public AdminController(AdminService admin, SiteSettingsService settings, AppDbContext db, SafetyService safety, IdentityVerificationService identity)
+    public AdminController(AdminService admin, SiteSettingsService settings, AppDbContext db, SafetyService safety, IdentityVerificationService identity, ILogger<AdminController> log)
     {
         _admin = admin;
         _settings = settings;
         _db = db;
         _safety = safety;
         _identity = identity;
+        _log = log;
     }
 
     [HttpGet("metrics")]
@@ -45,14 +49,20 @@ public sealed class AdminController : ControllerBase
     [HttpPost("users/{userId:guid}/suspend")]
     public async Task<IActionResult> Suspend(Guid userId, [FromBody] SuspendUserRequest req, CancellationToken ct)
     {
-        await _admin.SuspendUserAsync(userId, req.Suspend, ct);
+        if (string.IsNullOrWhiteSpace(req.Note))
+            return BadRequest(new { message = "A suspension note is required." });
+
+        await _admin.SuspendUserAsync(userId, req.Suspend, req.Note.Trim(), ct);
         return NoContent();
     }
 
     [HttpPost("trips/{tripId:guid}/hide")]
     public async Task<IActionResult> HideTrip(Guid tripId, [FromBody] HideTripRequest req, CancellationToken ct)
     {
-        await _admin.HideTripAsync(tripId, req.Hide, ct);
+        if (string.IsNullOrWhiteSpace(req.Note))
+            return BadRequest(new { message = "A trip visibility note is required." });
+
+        await _admin.HideTripAsync(tripId, req.Hide, req.Note.Trim(), ct);
         return NoContent();
     }
 
@@ -60,32 +70,49 @@ public sealed class AdminController : ControllerBase
     public async Task<IActionResult> Settings(CancellationToken ct)
     {
         var driverVerificationRequired = await _settings.GetDriverVerificationRequiredAsync(ct);
-        var ads = await _settings.GetAdConfigurationAsync(ct);
+        AdConfigurationDto? ads = null;
+        if (User.IsSuperAdmin())
+        {
+            ads = await _settings.GetAdConfigurationAsync(ct);
+        }
         return Ok(new
         {
             driverVerificationRequired,
-            ads = new
-            {
-                ads.Enabled,
-                ads.FrequencyCapPerSession,
-                ads.MaxSlotsPerPage,
-                slots = ads.Slots
-            }
+            ads = ads is null
+                ? null
+                : new
+                {
+                    ads.Enabled,
+                    ads.FrequencyCapPerSession,
+                    ads.MaxSlotsPerPage,
+                    slots = ads.Slots
+                }
         });
     }
 
     [HttpPost("settings/driver-verification")]
+    [Authorize(Roles = "superadmin")]
     public async Task<IActionResult> SetDriverVerification([FromBody] bool required, CancellationToken ct)
     {
-        await _settings.SetDriverVerificationRequiredAsync(required, ct);
-        return NoContent();
+        try
+        {
+            await _settings.SetDriverVerificationRequiredAsync(required, ct);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Failed to update driver verification requirement to {Required}.", required);
+            return BadRequest(new { message = "Failed to update setting." });
+        }
     }
 
     [HttpGet("ads/config")]
+    [Authorize(Roles = "superadmin")]
     public async Task<IActionResult> GetAdConfiguration(CancellationToken ct)
         => Ok(await _settings.GetAdConfigurationAsync(ct));
 
     [HttpPost("ads/config")]
+    [Authorize(Roles = "superadmin")]
     public async Task<IActionResult> SetAdConfiguration([FromBody] AdConfigurationDto config, CancellationToken ct)
     {
         await _settings.SetAdConfigurationAsync(config, ct);
@@ -93,10 +120,12 @@ public sealed class AdminController : ControllerBase
     }
 
     [HttpGet("branding")]
+    [Authorize(Roles = "superadmin")]
     public async Task<IActionResult> GetBranding(CancellationToken ct)
         => Ok(await _settings.GetBrandingConfigAsync(ct));
 
     [HttpPost("branding")]
+    [Authorize(Roles = "superadmin")]
     public async Task<IActionResult> SetBranding([FromBody] BrandingConfigDto config, CancellationToken ct)
     {
         await _settings.SetBrandingConfigAsync(config, ct);
@@ -132,6 +161,15 @@ public sealed class AdminController : ControllerBase
     [HttpGet("identity-verifications")]
     public async Task<IActionResult> IdentityVerifications([FromQuery] IdentityVerificationStatus? status = null, [FromQuery] int take = 100, CancellationToken ct = default)
         => Ok((await _identity.ListAsync(status, take, ct)).Select(ToDto));
+
+    [HttpGet("drivers/search")]
+    public async Task<IActionResult> SearchDrivers([FromQuery] string query, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 3)
+            return Ok(Array.Empty<DriverSearchResult>());
+
+        return Ok(await _admin.SearchDriversAsync(query.Trim(), ct));
+    }
 
     [HttpPost("identity-verifications/{id:guid}/review")]
     public async Task<IActionResult> ReviewIdentityVerification(Guid id, [FromBody] IdentityVerificationReview review, CancellationToken ct)

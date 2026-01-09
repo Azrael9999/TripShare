@@ -70,11 +70,11 @@
           </div>
           <div>
             <label class="text-sm text-slate-600">Trip ID (optional)</label>
-            <input v-model="panicForm.tripId" class="input mt-1" placeholder="Trip GUID" />
+            <input v-model="panicForm.tripId" class="input mt-1" placeholder="Trip ID" />
           </div>
           <div>
             <label class="text-sm text-slate-600">Booking ID (optional)</label>
-            <input v-model="panicForm.bookingId" class="input mt-1" placeholder="Booking GUID" />
+            <input v-model="panicForm.bookingId" class="input mt-1" placeholder="Booking ID" />
           </div>
           <div class="sm:col-span-2">
             <label class="text-sm text-slate-600">Summary</label>
@@ -100,8 +100,8 @@
         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label class="text-sm text-slate-600">Trip ID</label>
-            <input v-model="shareForm.tripId" class="input mt-1" placeholder="Trip GUID" />
-            <p v-if="shareForm.tripId && !isGuid(shareForm.tripId)" class="text-xs text-red-600">Enter a valid GUID.</p>
+            <input v-model="shareForm.tripId" class="input mt-1" placeholder="Trip ID" />
+            <p v-if="shareForm.tripId && !isGuid(shareForm.tripId)" class="text-xs text-red-600">Enter a valid ID.</p>
           </div>
           <div>
             <label class="text-sm text-slate-600">Expires (minutes)</label>
@@ -145,7 +145,7 @@
           </div>
           <div>
             <label class="text-sm text-slate-600">Target ID</label>
-            <input v-model="targetId" class="input mt-1" placeholder="GUID" />
+            <input v-model="targetId" class="input mt-1" placeholder="User ID" />
             <p class="text-xs text-slate-500 mt-1">From trip/booking URL or profile.</p>
           </div>
           <div class="sm:col-span-2">
@@ -191,7 +191,7 @@
         <div class="mt-5 border-t border-slate-100 pt-4">
           <div class="font-semibold">Block a user</div>
           <div class="mt-2 flex flex-col sm:flex-row gap-3">
-            <input v-model="blockId" class="input flex-1" placeholder="User GUID" />
+            <input v-model="blockId" class="input flex-1" placeholder="User ID" />
             <button class="btn-primary" @click="block">Block</button>
           </div>
           <p v-if="blockErr" class="text-sm text-red-600 mt-2">{{ blockErr }}</p>
@@ -329,11 +329,11 @@ async function submitPanic() {
     return
   }
   if (panicForm.value.tripId && !isGuid(panicForm.value.tripId)) {
-    panicErr.value = 'Trip ID must be a valid GUID.'
+    panicErr.value = 'Trip ID must be a valid ID.'
     return
   }
   if (panicForm.value.bookingId && !isGuid(panicForm.value.bookingId)) {
-    panicErr.value = 'Booking ID must be a valid GUID.'
+    panicErr.value = 'Booking ID must be a valid ID.'
     return
   }
   panicSending.value = true
@@ -370,7 +370,7 @@ const shareLinkUrl = computed(() => {
 
 async function createShareLink() {
   if (!isGuid(shareForm.value.tripId)) {
-    shareErr.value = 'Trip ID must be a valid GUID.'
+    shareErr.value = 'Trip ID must be a valid ID.'
     return
   }
   if (!shareForm.value.expiresMinutes || shareForm.value.expiresMinutes < 5) {

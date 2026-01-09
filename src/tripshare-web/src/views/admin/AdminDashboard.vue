@@ -23,16 +23,11 @@
         </div>
       </div>
 
-      <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="card p-5">
         <div>
           <div class="font-semibold">Identity verification</div>
           <p class="text-sm text-slate-600 mt-1">Review driver documents to unlock verified badges.</p>
           <RouterLink to="/admin/identity" class="btn-outline mt-3 inline-flex items-center">Review submissions</RouterLink>
-        </div>
-        <div>
-          <div class="font-semibold">Ad configuration</div>
-          <p class="text-sm text-slate-600 mt-1">Manage slots and client-side frequency caps.</p>
-          <RouterLink to="/admin/ads" class="btn-outline mt-3 inline-flex items-center">Configure ads</RouterLink>
         </div>
       </div>
 
@@ -46,99 +41,53 @@
         </div>
       </div>
 
-      <div class="card p-5">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="font-semibold">Driver verification gate</div>
-            <p class="text-sm text-slate-600 mt-1">
-              Require admin-verified drivers before creating trips. Applies platform-wide.
-            </p>
-          </div>
-          <button class="btn-outline" @click="toggleDriverVerification">
-            {{ driverVerificationRequired ? 'Disable' : 'Enable' }}
-          </button>
-        </div>
-        <p class="text-sm text-slate-600 mt-3">
-          Current state: <span class="badge">{{ driverVerificationRequired ? 'Required' : 'Off' }}</span>
-        </p>
-        <p v-if="settingsMsg" class="text-sm text-emerald-700 mt-2">{{ settingsMsg }}</p>
-        <p v-if="settingsErr" class="text-sm text-red-600 mt-2">{{ settingsErr }}</p>
-      </div>
-
-      <div class="card p-5">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="font-semibold">Branding assets</div>
-            <p class="text-sm text-slate-600 mt-1">Upload logos and banners used across the site.</p>
-          </div>
-          <button class="btn-primary" :disabled="brandingSaving" @click="saveBranding">
-            <span v-if="brandingSaving">Saving…</span>
-            <span v-else>Save branding</span>
-          </button>
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <div class="text-xs text-slate-600">Logo</div>
-            <img v-if="branding.logoUrl" :src="branding.logoUrl" class="h-12 object-contain rounded-xl border border-slate-100 bg-white p-2" />
-            <input type="file" accept="image/*" class="input" @change="onBrandFile('logoUrl', $event)" />
-          </div>
-          <div class="space-y-2">
-            <div class="text-xs text-slate-600">Hero banner</div>
-            <img v-if="branding.heroImageUrl" :src="branding.heroImageUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
-            <input type="file" accept="image/*" class="input" @change="onBrandFile('heroImageUrl', $event)" />
-          </div>
-          <div class="space-y-2">
-            <div class="text-xs text-slate-600">Map overlay</div>
-            <img v-if="branding.mapOverlayUrl" :src="branding.mapOverlayUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
-            <input type="file" accept="image/*" class="input" @change="onBrandFile('mapOverlayUrl', $event)" />
-          </div>
-          <div class="space-y-2">
-            <div class="text-xs text-slate-600">Login illustration</div>
-            <img v-if="branding.loginIllustrationUrl" :src="branding.loginIllustrationUrl" class="h-20 w-full object-cover rounded-xl border border-slate-100" />
-            <input type="file" accept="image/*" class="input" @change="onBrandFile('loginIllustrationUrl', $event)" />
-          </div>
-        </div>
-
-        <p v-if="brandingMsg" class="text-sm text-emerald-700 mt-3">{{ brandingMsg }}</p>
-        <p v-if="brandingErr" class="text-sm text-red-600 mt-3">{{ brandingErr }}</p>
-      </div>
-
       <div v-if="isSuperAdmin" class="card p-5">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex items-center justify-between">
           <div>
-            <div class="font-semibold">Google Maps API</div>
-            <p class="text-sm text-slate-600 mt-1">Update the Maps API key used across the site.</p>
+            <div class="font-semibold">Site settings</div>
+            <p class="text-sm text-slate-600 mt-1">Manage ads, branding, maps, and driver verification gate.</p>
           </div>
-          <button class="btn-primary" :disabled="mapsSaving" @click="saveMapsApiKey">
-            <span v-if="mapsSaving">Saving…</span>
-            <span v-else>Save Maps key</span>
-          </button>
+          <RouterLink to="/admin/site-settings" class="btn-outline">Open settings</RouterLink>
         </div>
-        <div class="mt-4">
-          <label class="text-xs text-slate-600">API key</label>
-          <input v-model="mapsApiKey" type="text" class="input mt-1" placeholder="Paste Google Maps API key" />
-          <p class="text-xs text-slate-500 mt-2">Changes apply immediately to map-based features.</p>
-        </div>
-        <p v-if="mapsMsg" class="text-sm text-emerald-700 mt-3">{{ mapsMsg }}</p>
-        <p v-if="mapsErr" class="text-sm text-red-600 mt-3">{{ mapsErr }}</p>
       </div>
 
       <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-2">
           <div class="font-semibold">Suspend / unsuspend user</div>
-          <input v-model="suspendUserId" class="input" placeholder="User GUID" />
+          <input
+            v-model="suspendUserQuery"
+            class="input"
+            placeholder="Search drivers by name, email, phone, vehicle, or user ID"
+            title="Search drivers by name, email, phone number, vehicle details (make/model/color/plate), or user ID."
+          />
+          <div v-if="suspendSearchLoading" class="text-xs text-slate-500 mt-2">Searching drivers…</div>
+          <div v-if="suspendSuggestions.length" class="mt-2 space-y-2">
+            <button
+              v-for="driver in suspendSuggestions"
+              :key="driver.id"
+              class="w-full rounded-xl border border-slate-100 bg-white p-3 text-left text-sm hover:border-slate-200"
+              @click="selectSuspendDriver(driver)"
+            >
+              <div class="font-semibold">{{ driver.displayName || driver.email }}</div>
+              <div class="text-xs text-slate-500">
+                {{ driver.email }} · {{ driver.phoneNumber || 'No phone' }} · {{ driver.vehicleSummary || 'No vehicle' }}
+              </div>
+              <div class="text-xs text-slate-400">ID: {{ driver.id }}</div>
+            </button>
+          </div>
+          <textarea v-model="suspendNote" class="textarea" rows="2" placeholder="Reason for suspension change"></textarea>
           <div class="flex gap-2">
-            <button class="btn-outline" :disabled="!isGuid(suspendUserId)" @click="suspend(true)">Suspend</button>
-            <button class="btn-ghost" :disabled="!isGuid(suspendUserId)" @click="suspend(false)">Unsuspend</button>
+            <button class="btn-outline" :disabled="!suspendUserId || !hasNote(suspendNote)" @click="suspend(true)">Suspend</button>
+            <button class="btn-ghost" :disabled="!suspendUserId || !hasNote(suspendNote)" @click="suspend(false)">Unsuspend</button>
           </div>
         </div>
         <div class="space-y-2">
           <div class="font-semibold">Hide / unhide trip</div>
-          <input v-model="hideTripId" class="input" placeholder="Trip GUID" />
+          <input v-model="hideTripId" class="input" placeholder="Trip ID" title="Trip ID (UUID format)" />
+          <textarea v-model="hideNote" class="textarea" rows="2" placeholder="Reason for visibility change"></textarea>
           <div class="flex gap-2">
-            <button class="btn-outline" :disabled="!isGuid(hideTripId)" @click="hide(true)">Hide</button>
-            <button class="btn-ghost" :disabled="!isGuid(hideTripId)" @click="hide(false)">Unhide</button>
+            <button class="btn-outline" :disabled="!isGuid(hideTripId) || !hasNote(hideNote)" @click="hide(true)">Hide</button>
+            <button class="btn-ghost" :disabled="!isGuid(hideTripId) || !hasNote(hideNote)" @click="hide(false)">Unhide</button>
           </div>
         </div>
       </div>
@@ -146,11 +95,31 @@
       <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-2">
           <div class="font-semibold">Driver verification</div>
-          <input v-model="verifyUserId" class="input" placeholder="User GUID" />
+          <input
+            v-model="verifyUserQuery"
+            class="input"
+            placeholder="Search drivers by name, email, phone, vehicle, or user ID"
+            title="Search drivers by name, email, phone number, vehicle details (make/model/color/plate), or user ID."
+          />
+          <div v-if="verifySearchLoading" class="text-xs text-slate-500 mt-2">Searching drivers…</div>
+          <div v-if="verifySuggestions.length" class="mt-2 space-y-2">
+            <button
+              v-for="driver in verifySuggestions"
+              :key="driver.id"
+              class="w-full rounded-xl border border-slate-100 bg-white p-3 text-left text-sm hover:border-slate-200"
+              @click="selectVerifyDriver(driver)"
+            >
+              <div class="font-semibold">{{ driver.displayName || driver.email }}</div>
+              <div class="text-xs text-slate-500">
+                {{ driver.email }} · {{ driver.phoneNumber || 'No phone' }} · {{ driver.vehicleSummary || 'No vehicle' }}
+              </div>
+              <div class="text-xs text-slate-400">ID: {{ driver.id }}</div>
+            </button>
+          </div>
           <textarea v-model="verifyNote" class="textarea" rows="2" placeholder="Optional note"></textarea>
           <div class="flex gap-2">
-            <button class="btn-outline" :disabled="!isGuid(verifyUserId)" @click="verifyDriver(true)">Mark verified</button>
-            <button class="btn-ghost" :disabled="!isGuid(verifyUserId)" @click="verifyDriver(false)">Unverify</button>
+            <button class="btn-outline" :disabled="!verifyUserId" @click="verifyDriver(true)">Mark verified</button>
+            <button class="btn-ghost" :disabled="!verifyUserId" @click="verifyDriver(false)">Unverify</button>
           </div>
           <p v-if="verifyMsg" class="text-sm text-emerald-700">{{ verifyMsg }}</p>
           <p v-if="verifyErr" class="text-sm text-red-600">{{ verifyErr }}</p>
@@ -198,20 +167,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { http } from '../../lib/api'
-import { applyBrandingConfig, type BrandingConfig } from '../../lib/branding'
 import AdSlot from '../../components/AdSlot.vue'
 import { useAuthStore } from '../../stores/auth'
 
 const metrics = ref<any|null>(null)
-const driverVerificationRequired = ref(false)
-const settingsMsg = ref('')
-const settingsErr = ref('')
 const adminMsg = ref('')
 const adminErr = ref('')
+type DriverSearchResult = {
+  id: string
+  displayName?: string | null
+  email?: string | null
+  phoneNumber?: string | null
+  vehicleSummary?: string | null
+}
+
+const suspendUserQuery = ref('')
 const suspendUserId = ref('')
+const suspendNote = ref('')
 const hideTripId = ref('')
+const hideNote = ref('')
+const verifyUserQuery = ref('')
 const verifyUserId = ref('')
 const verifyNote = ref('')
 const verifyMsg = ref('')
@@ -219,16 +196,14 @@ const verifyErr = ref('')
 const incidents = ref<any[]>([])
 const incidentsLoading = ref(false)
 const incidentsErr = ref('')
-const branding = ref<BrandingConfig>({})
-const brandingSaving = ref(false)
-const brandingMsg = ref('')
-const brandingErr = ref('')
-const mapsApiKey = ref('')
-const mapsSaving = ref(false)
-const mapsMsg = ref('')
-const mapsErr = ref('')
 const auth = useAuthStore()
 const isSuperAdmin = computed(() => auth.me?.role === 'superadmin')
+const suspendSuggestions = ref<DriverSearchResult[]>([])
+const verifySuggestions = ref<DriverSearchResult[]>([])
+const suspendSearchLoading = ref(false)
+const verifySearchLoading = ref(false)
+let suspendSearchTimer: ReturnType<typeof setTimeout> | null = null
+let verifySearchTimer: ReturnType<typeof setTimeout> | null = null
 
 const cards = computed(() => {
   const m = metrics.value ?? {}
@@ -241,101 +216,30 @@ const cards = computed(() => {
 })
 
 async function load() {
-  const [metricsResp, settingsResp] = await Promise.all([
-    http.get('/admin/metrics'),
-    http.get('/admin/settings')
-  ])
+  const metricsResp = await http.get('/admin/metrics')
   metrics.value = metricsResp.data
-  driverVerificationRequired.value = !!settingsResp.data?.driverVerificationRequired
-  await loadBranding()
-  await loadMapsApiKey()
   await loadIncidents()
 }
 load()
 
-async function toggleDriverVerification() {
-  settingsMsg.value = ''
-  settingsErr.value = ''
-  try {
-    const newVal = !driverVerificationRequired.value
-    await http.post('/admin/settings/driver-verification', newVal)
-    driverVerificationRequired.value = newVal
-    settingsMsg.value = `Driver verification requirement ${newVal ? 'enabled' : 'disabled'}.`
-  } catch (e:any) {
-    settingsErr.value = e?.response?.data?.message ?? 'Failed to update setting.'
-  }
-}
-
-async function loadBranding() {
-  try {
-    const resp = await http.get<BrandingConfig | null>('/admin/branding')
-    branding.value = resp.data ?? {}
-  } catch {
-    branding.value = {}
-  }
-}
-
-async function loadMapsApiKey() {
-  if (!isSuperAdmin.value) return
-  try {
-    const resp = await http.get<{ apiKey?: string | null; ApiKey?: string | null }>('/admin/maps/config')
-    mapsApiKey.value = (resp.data?.apiKey ?? resp.data?.ApiKey ?? '') as string
-  } catch {
-    mapsApiKey.value = ''
-  }
-}
-
-function onBrandFile(key: keyof BrandingConfig, event: Event) {
-  const input = event.target as HTMLInputElement | null
-  const file = input?.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    branding.value = { ...branding.value, [key]: String(reader.result) }
-  }
-  reader.readAsDataURL(file)
-}
-
-async function saveBranding() {
-  brandingMsg.value = ''
-  brandingErr.value = ''
-  brandingSaving.value = true
-  try {
-    await http.post('/admin/branding', branding.value)
-    applyBrandingConfig(branding.value)
-    brandingMsg.value = 'Branding updated.'
-  } catch (e:any) {
-    brandingErr.value = e?.response?.data?.message ?? 'Failed to update branding.'
-  } finally {
-    brandingSaving.value = false
-  }
-}
-
-async function saveMapsApiKey() {
-  mapsMsg.value = ''
-  mapsErr.value = ''
-  mapsSaving.value = true
-  try {
-    await http.post('/admin/maps/config', { apiKey: mapsApiKey.value || null })
-    mapsMsg.value = 'Maps API key updated.'
-  } catch (e:any) {
-    mapsErr.value = e?.response?.data?.message ?? 'Failed to update Maps API key.'
-  } finally {
-    mapsSaving.value = false
-  }
-}
-
 async function suspend(suspendUser:boolean) {
   adminMsg.value = ''
   adminErr.value = ''
-  if (!isGuid(suspendUserId.value)) {
-    adminErr.value = 'Enter a valid user ID (GUID).'
+  if (!suspendUserId.value) {
+    adminErr.value = 'Select a driver to update.'
+    return
+  }
+  if (!hasNote(suspendNote.value)) {
+    adminErr.value = 'Provide a suspension note before updating the user.'
     return
   }
   try {
-    await http.post(`/admin/users/${suspendUserId.value}/suspend`, { suspend: suspendUser })
+    await http.post(`/admin/users/${suspendUserId.value}/suspend`, { suspend: suspendUser, note: suspendNote.value.trim() })
     adminMsg.value = suspendUser ? 'User suspended.' : 'User unsuspended.'
+    suspendUserQuery.value = ''
     suspendUserId.value = ''
+    suspendNote.value = ''
+    suspendSuggestions.value = []
   } catch (e:any) {
     adminErr.value = e?.response?.data?.message ?? 'Failed to update user.'
   }
@@ -345,13 +249,18 @@ async function hide(hideTrip:boolean) {
   adminMsg.value = ''
   adminErr.value = ''
   if (!isGuid(hideTripId.value)) {
-    adminErr.value = 'Enter a valid trip ID (GUID).'
+    adminErr.value = 'Enter a valid trip ID.'
+    return
+  }
+  if (!hasNote(hideNote.value)) {
+    adminErr.value = 'Provide a visibility note before updating the trip.'
     return
   }
   try {
-    await http.post(`/admin/trips/${hideTripId.value}/hide`, { hide: hideTrip })
+    await http.post(`/admin/trips/${hideTripId.value}/hide`, { hide: hideTrip, note: hideNote.value.trim() })
     adminMsg.value = hideTrip ? 'Trip hidden.' : 'Trip unhidden.'
     hideTripId.value = ''
+    hideNote.value = ''
   } catch (e:any) {
     adminErr.value = e?.response?.data?.message ?? 'Failed to update trip.'
   }
@@ -360,15 +269,17 @@ async function hide(hideTrip:boolean) {
 async function verifyDriver(verified:boolean) {
   verifyMsg.value = ''
   verifyErr.value = ''
-  if (!isGuid(verifyUserId.value)) {
-    verifyErr.value = 'Enter a valid user ID (GUID).'
+  if (!verifyUserId.value) {
+    verifyErr.value = 'Select a driver to update.'
     return
   }
   try {
     await http.post(`/admin/users/${verifyUserId.value}/driver-verify`, { verified, note: verifyNote.value || null })
     verifyMsg.value = verified ? 'Driver verified.' : 'Driver marked unverified.'
+    verifyUserQuery.value = ''
     verifyUserId.value = ''
     verifyNote.value = ''
+    verifySuggestions.value = []
   } catch (e:any) {
     verifyErr.value = e?.response?.data?.message ?? 'Failed to update driver verification.'
   }
@@ -401,4 +312,77 @@ async function resolveIncident(id:string, status:string) {
 function isGuid(value: string) {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value.trim())
 }
+
+function hasNote(value: string) {
+  return value.trim().length > 0
+}
+
+async function fetchDriverSuggestions(query: string) {
+  const resp = await http.get<DriverSearchResult[]>('/admin/drivers/search', { params: { query } })
+  return resp.data ?? []
+}
+
+function selectSuspendDriver(driver: DriverSearchResult) {
+  suspendUserId.value = driver.id
+  suspendUserQuery.value = driver.displayName || driver.email || driver.id
+  suspendSuggestions.value = []
+}
+
+function selectVerifyDriver(driver: DriverSearchResult) {
+  verifyUserId.value = driver.id
+  verifyUserQuery.value = driver.displayName || driver.email || driver.id
+  verifySuggestions.value = []
+}
+
+watch(suspendUserQuery, (value) => {
+  const trimmed = value.trim()
+  if (isGuid(trimmed)) {
+    suspendUserId.value = trimmed
+    suspendSuggestions.value = []
+    return
+  }
+  suspendUserId.value = ''
+  if (trimmed.length < 3) {
+    suspendSuggestions.value = []
+    if (suspendSearchTimer) clearTimeout(suspendSearchTimer)
+    return
+  }
+  if (suspendSearchTimer) clearTimeout(suspendSearchTimer)
+  suspendSearchTimer = setTimeout(async () => {
+    suspendSearchLoading.value = true
+    try {
+      suspendSuggestions.value = await fetchDriverSuggestions(trimmed)
+    } catch {
+      suspendSuggestions.value = []
+    } finally {
+      suspendSearchLoading.value = false
+    }
+  }, 250)
+})
+
+watch(verifyUserQuery, (value) => {
+  const trimmed = value.trim()
+  if (isGuid(trimmed)) {
+    verifyUserId.value = trimmed
+    verifySuggestions.value = []
+    return
+  }
+  verifyUserId.value = ''
+  if (trimmed.length < 3) {
+    verifySuggestions.value = []
+    if (verifySearchTimer) clearTimeout(verifySearchTimer)
+    return
+  }
+  if (verifySearchTimer) clearTimeout(verifySearchTimer)
+  verifySearchTimer = setTimeout(async () => {
+    verifySearchLoading.value = true
+    try {
+      verifySuggestions.value = await fetchDriverSuggestions(trimmed)
+    } catch {
+      verifySuggestions.value = []
+    } finally {
+      verifySearchLoading.value = false
+    }
+  }, 250)
+})
 </script>

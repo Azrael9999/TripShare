@@ -26,6 +26,8 @@ public sealed class Trip
     public decimal? DefaultPricePerSeat { get; set; } // optional if you want a simple mode too
 
     public string? Notes { get; set; }
+    public string? VisibilityNote { get; set; }
+    public DateTimeOffset? VisibilityUpdatedAt { get; set; }
 
     public TripStatus Status { get; set; } = TripStatus.Scheduled;
     public DateTimeOffset StatusUpdatedAt { get; set; } = DateTimeOffset.UtcNow;

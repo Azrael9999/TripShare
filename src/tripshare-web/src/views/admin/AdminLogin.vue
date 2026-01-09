@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
@@ -36,6 +36,17 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
+const isAdmin = computed(() => auth.me?.role === 'admin' || auth.me?.role === 'superadmin')
+
+watch(
+  () => auth.isAuthenticated,
+  (isAuthed) => {
+    if (isAuthed && isAdmin.value) {
+      router.replace('/admin')
+    }
+  },
+  { immediate: true }
+)
 
 async function submit() {
   error.value = ''

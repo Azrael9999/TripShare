@@ -104,6 +104,26 @@
         <p v-if="brandingErr" class="text-sm text-red-600 mt-3">{{ brandingErr }}</p>
       </div>
 
+      <div v-if="isSuperAdmin" class="card p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="font-semibold">Google Maps API</div>
+            <p class="text-sm text-slate-600 mt-1">Update the Maps API key used across the site.</p>
+          </div>
+          <button class="btn-primary" :disabled="mapsSaving" @click="saveMapsApiKey">
+            <span v-if="mapsSaving">Saving…</span>
+            <span v-else>Save Maps key</span>
+          </button>
+        </div>
+        <div class="mt-4">
+          <label class="text-xs text-slate-600">API key</label>
+          <input v-model="mapsApiKey" type="text" class="input mt-1" placeholder="Paste Google Maps API key" />
+          <p class="text-xs text-slate-500 mt-2">Changes apply immediately to map-based features.</p>
+        </div>
+        <p v-if="mapsMsg" class="text-sm text-emerald-700 mt-3">{{ mapsMsg }}</p>
+        <p v-if="mapsErr" class="text-sm text-red-600 mt-3">{{ mapsErr }}</p>
+      </div>
+
       <div class="card p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-2">
           <div class="font-semibold">Suspend / unsuspend user</div>
@@ -203,6 +223,10 @@ const branding = ref<BrandingConfig>({})
 const brandingSaving = ref(false)
 const brandingMsg = ref('')
 const brandingErr = ref('')
+const mapsApiKey = ref('')
+const mapsSaving = ref(false)
+const mapsMsg = ref('')
+const mapsErr = ref('')
 const auth = useAuthStore()
 const isSuperAdmin = computed(() => auth.me?.role === 'superadmin')
 
@@ -224,6 +248,7 @@ async function load() {
   metrics.value = metricsResp.data
   driverVerificationRequired.value = !!settingsResp.data?.driverVerificationRequired
   await loadBranding()
+  await loadMapsApiKey()
   await loadIncidents()
 }
 load()
@@ -250,6 +275,16 @@ async function loadBranding() {
   }
 }
 
+async function loadMapsApiKey() {
+  if (!isSuperAdmin.value) return
+  try {
+    const resp = await http.get<{ apiKey?: string | null; ApiKey?: string | null }>('/admin/maps/config')
+    mapsApiKey.value = (resp.data?.apiKey ?? resp.data?.ApiKey ?? '') as string
+  } catch {
+    mapsApiKey.value = ''
+  }
+}
+
 function onBrandFile(key: keyof BrandingConfig, event: Event) {
   const input = event.target as HTMLInputElement | null
   const file = input?.files?.[0]
@@ -273,6 +308,20 @@ async function saveBranding() {
     brandingErr.value = e?.response?.data?.message ?? 'Failed to update branding.'
   } finally {
     brandingSaving.value = false
+  }
+}
+
+async function saveMapsApiKey() {
+  mapsMsg.value = ''
+  mapsErr.value = ''
+  mapsSaving.value = true
+  try {
+    await http.post('/admin/maps/config', { apiKey: mapsApiKey.value || null })
+    mapsMsg.value = 'Maps API key updated.'
+  } catch (e:any) {
+    mapsErr.value = e?.response?.data?.message ?? 'Failed to update Maps API key.'
+  } finally {
+    mapsSaving.value = false
   }
 }
 

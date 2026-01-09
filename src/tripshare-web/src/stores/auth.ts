@@ -71,7 +71,7 @@ export const useAuthStore = defineStore('auth', {
       this.initialized = true
 
       // if tokens exist, refresh me silently
-      if (this.accessToken && this.me) {
+      if (this.accessToken) {
         try {
           await this.loadMe()
         } catch {

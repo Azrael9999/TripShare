@@ -27,6 +27,7 @@
         <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost">Profile</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/safety" class="btn-ghost">Safety</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && isAdmin" to="/admin" class="btn-ghost">Admin</RouterLink>
       </nav>
 
       <div class="flex items-center gap-2">
@@ -49,6 +50,7 @@
         <RouterLink v-if="auth.isAuthenticated" to="/notifications" class="btn-ghost px-3 py-2">Alerts</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/messages" class="btn-ghost px-3 py-2">Messages</RouterLink>
         <RouterLink v-if="auth.isAuthenticated" to="/profile" class="btn-ghost px-3 py-2">Profile</RouterLink>
+        <RouterLink v-if="auth.isAuthenticated && isAdmin" to="/admin" class="btn-ghost px-3 py-2">Admin</RouterLink>
       </div>
     </div>
   </header>
@@ -68,6 +70,7 @@ import {
 const auth = useAuthStore()
 const unreadCount = ref(0)
 const brandLogo = computed(() => (hasImage(brandConfig.logoUrl) ? brandConfig.logoUrl : ''))
+const isAdmin = computed(() => auth.me?.role === 'admin' || auth.me?.role === 'superadmin')
 
 async function refreshUnread() {
   if (!auth.isAuthenticated) { unreadCount.value = 0; return }

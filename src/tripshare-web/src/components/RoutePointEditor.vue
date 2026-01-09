@@ -10,8 +10,8 @@
       </button>
     </div>
 
-    <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div class="sm:col-span-3">
+    <div class="mt-3 grid grid-cols-1 gap-4">
+      <div>
         <PlacesAutocomplete
           v-model="item.displayAddress"
           label="Address"
@@ -20,18 +20,12 @@
           @select="onSelect"
         />
       </div>
-      <div>
-        <label class="text-sm text-slate-600">Lat</label>
-        <input v-model.number="item.lat" type="number" class="input mt-1" />
-      </div>
-      <div>
-        <label class="text-sm text-slate-600">Lng</label>
-        <input v-model.number="item.lng" type="number" class="input mt-1" />
-      </div>
-      <div>
-        <label class="text-sm text-slate-600">PlaceId</label>
-        <input v-model="item.placeId" class="input mt-1" />
-      </div>
+      <MapPinPicker
+        v-model:lat="item.lat"
+        v-model:lng="item.lng"
+        label="Pin location"
+        helper="Drag the pin or click the map to fine-tune the pickup/drop-off point."
+      />
     </div>
   </div>
 </template>
@@ -39,6 +33,7 @@
 <script setup lang="ts">
 import { TrashIcon } from '@heroicons/vue/24/outline'
 import PlacesAutocomplete from './PlacesAutocomplete.vue'
+import MapPinPicker from './MapPinPicker.vue'
 const props = defineProps<{
   item: any
   canRemove: boolean

@@ -103,6 +103,19 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("maps/config")]
+    [Authorize(Roles = "superadmin")]
+    public async Task<ActionResult<MapApiConfigDto>> GetMapsConfig(CancellationToken ct)
+        => Ok(await _settings.GetMapApiConfigAsync(ct));
+
+    [HttpPost("maps/config")]
+    [Authorize(Roles = "superadmin")]
+    public async Task<IActionResult> SetMapsConfig([FromBody] MapApiConfigDto config, CancellationToken ct)
+    {
+        await _settings.SetMapApiConfigAsync(config, ct);
+        return NoContent();
+    }
+
     [HttpPost("users/{userId:guid}/driver-verify")]
     public async Task<IActionResult> VerifyDriver(Guid userId, [FromBody] DriverVerificationRequest req, CancellationToken ct)
     {

@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 type GoogleMaps = any
 declare const google: any
 
@@ -9,6 +11,9 @@ declare global {
 
 const scriptId = 'google-maps-js'
 let loadPromise: Promise<GoogleMaps | null> | null = null
+let apiKeyPromise: Promise<string | null> | null = null
+
+export const mapsWarning = ref<string | null>(null)
 
 const autocompleteCache = new Map<string, { ts: number; predictions: any[] }>()
 const placeDetailsCache = new Map<string, { ts: number; result: any }>()
@@ -20,41 +25,73 @@ export async function loadGoogleMapsPlaces(opts?: { language?: string; region?: 
   if (loadPromise) return loadPromise
 
   loadPromise = new Promise((resolve) => {
-    const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY
-    if (!apiKey) {
-      console.warn('VITE_GOOGLE_MAPS_API_KEY is missing; Places autocomplete will be disabled.')
-      resolve(null)
-      return
+    const run = async () => {
+      const apiKey = await getMapsApiKey()
+      if (!apiKey) {
+        mapsWarning.value = 'Google Maps is not configured. Please contact support.'
+        resolve(null)
+        return
+      }
+
+      if (typeof window === 'undefined') {
+        resolve(null)
+        return
+      }
+
+      if (document.getElementById(scriptId)) {
+        resolve(window.google ?? null)
+        return
+      }
+
+      const script = document.createElement('script')
+      script.id = scriptId
+      const params = new URLSearchParams({
+        key: apiKey,
+        libraries: 'places',
+        language: opts?.language ?? 'en',
+        region: opts?.region ?? 'us',
+        v: 'weekly'
+      })
+      script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`
+      script.async = true
+      script.defer = true
+      script.onerror = () => {
+        mapsWarning.value = 'Google Maps failed to load. Check the API key configuration.'
+        resolve(null)
+      }
+      script.onload = () => resolve(window.google ?? null)
+      document.head.appendChild(script)
     }
 
-    if (typeof window === 'undefined') {
-      resolve(null)
-      return
-    }
-
-    if (document.getElementById(scriptId)) {
-      resolve(window.google ?? null)
-      return
-    }
-
-    const script = document.createElement('script')
-    script.id = scriptId
-    const params = new URLSearchParams({
-      key: apiKey,
-      libraries: 'places',
-      language: opts?.language ?? 'en',
-      region: opts?.region ?? 'us',
-      v: 'weekly'
-    })
-    script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`
-    script.async = true
-    script.defer = true
-    script.onerror = () => resolve(null)
-    script.onload = () => resolve(window.google ?? null)
-    document.head.appendChild(script)
+    void run()
   })
 
   return loadPromise
+}
+
+async function getMapsApiKey(): Promise<string | null> {
+  if (apiKeyPromise) return apiKeyPromise
+  const apiBase = (import.meta as any).env.VITE_API_BASE ?? 'http://localhost:8080'
+  const url = apiBase.replace(/\/$/, '') + '/api/maps/config'
+  apiKeyPromise = fetch(url)
+    .then(async (resp) => {
+      if (!resp.ok) {
+        throw new Error(`Maps config request failed: ${resp.status}`)
+      }
+      const data = (await resp.json()) as { apiKey?: string | null; ApiKey?: string | null }
+      const value = data.apiKey ?? data.ApiKey ?? null
+      if (!value) {
+        mapsWarning.value = 'Google Maps is not configured. Please contact support.'
+      }
+      return value
+    })
+    .catch((err) => {
+      console.warn(err)
+      mapsWarning.value = 'Google Maps settings could not be loaded. Some features may be unavailable.'
+      return null
+    })
+
+  return apiKeyPromise
 }
 
 export async function getAutocomplete(query: string, sessionToken: any, opts?: { debounceMs?: number; minLength?: number }) {

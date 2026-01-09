@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using TripShare.Infrastructure.Data;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -10,15 +11,18 @@ public sealed class SiteSettingsService
 {
     private readonly AppDbContext _db;
     private readonly ILogger<SiteSettingsService> _log;
+    private readonly IDataProtector _protector;
 
     private const string DriverVerificationRequiredKey = "DriverVerificationRequired";
     private const string AdConfigKey = "AdConfig";
     private const string BrandingConfigKey = "BrandingConfig";
+    private const string MapsApiKeyKey = "MapsApiKey";
 
-    public SiteSettingsService(AppDbContext db, ILogger<SiteSettingsService> log)
+    public SiteSettingsService(AppDbContext db, ILogger<SiteSettingsService> log, IDataProtectionProvider dataProtectionProvider)
     {
         _db = db;
         _log = log;
+        _protector = dataProtectionProvider.CreateProtector("TripShare.SiteSettings.MapsApiKey");
     }
 
     public async Task<bool> GetDriverVerificationRequiredAsync(CancellationToken ct = default)
@@ -148,6 +152,53 @@ public sealed class SiteSettingsService
         _log.LogInformation("Branding configuration updated.");
     }
 
+    public async Task<MapApiConfigDto> GetMapApiConfigAsync(CancellationToken ct = default)
+    {
+        var raw = await _db.SiteSettings.AsNoTracking().Where(x => x.Key == MapsApiKeyKey).Select(x => x.Value).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return new MapApiConfigDto(null);
+        }
+
+        try
+        {
+            var value = _protector.Unprotect(raw);
+            return new MapApiConfigDto(value);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to decrypt maps API key from site settings.");
+            return new MapApiConfigDto(null);
+        }
+    }
+
+    public async Task SetMapApiConfigAsync(MapApiConfigDto config, CancellationToken ct = default)
+    {
+        ValidateMapApiConfig(config);
+        var now = DateTimeOffset.UtcNow;
+        var normalized = string.IsNullOrWhiteSpace(config.ApiKey) ? null : config.ApiKey.Trim();
+        var raw = string.IsNullOrWhiteSpace(normalized) ? string.Empty : _protector.Protect(normalized);
+        var setting = await _db.SiteSettings.FirstOrDefaultAsync(x => x.Key == MapsApiKeyKey, ct);
+        if (setting is null)
+        {
+            setting = new Domain.Entities.SiteSetting
+            {
+                Key = MapsApiKeyKey,
+                Value = raw,
+                UpdatedAt = now
+            };
+            _db.SiteSettings.Add(setting);
+        }
+        else
+        {
+            setting.Value = raw;
+            setting.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        _log.LogInformation("Maps API key updated.");
+    }
+
     private static void ValidateAdConfiguration(AdConfigurationDto config)
     {
         if (config.FrequencyCapPerSession < 0 || config.FrequencyCapPerSession > 100)
@@ -216,6 +267,14 @@ public sealed class SiteSettingsService
             config.MapOverlayUrl?.Length > maxLen || config.LoginIllustrationUrl?.Length > maxLen)
         {
             throw new InvalidOperationException("Branding image payload too large.");
+        }
+    }
+
+    private static void ValidateMapApiConfig(MapApiConfigDto config)
+    {
+        if (config.ApiKey is not null && config.ApiKey.Length > 512)
+        {
+            throw new InvalidOperationException("Maps API key too long.");
         }
     }
 

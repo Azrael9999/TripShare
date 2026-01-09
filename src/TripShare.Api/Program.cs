@@ -218,6 +218,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddDataProtection();
 
 // App services
 builder.Services.AddScoped<ITokenService, TokenService>();

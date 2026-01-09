@@ -220,6 +220,15 @@ public sealed class SiteSettingsService
 
             EnsureSafeMarkup(slot.Html);
         }
+
+        if (config.GoogleAdsClientId?.Length > 200)
+            throw new InvalidOperationException("Google Ads client ID is too long.");
+
+        if (config.GoogleAdsScriptUrl?.Length > 500)
+            throw new InvalidOperationException("Google Ads script URL is too long.");
+
+        if (config.GoogleAdsSlotId?.Length > 200)
+            throw new InvalidOperationException("Google Ads slot ID is too long.");
     }
 
     private static AdConfigurationDto DefaultAdConfiguration()
@@ -235,7 +244,7 @@ public sealed class SiteSettingsService
             new("my-trips-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true),
             new("admin-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true),
             new("verify-email-sidebar", "<div class='text-sm text-slate-500'>Ad space</div>", true)
-        });
+        }, null, null, null);
 
     private static void EnsureSafeMarkup(string html)
     {
@@ -257,7 +266,15 @@ public sealed class SiteSettingsService
         var maxSlots = config.MaxSlotsPerPage <= 0 ? defaults.MaxSlotsPerPage : config.MaxSlotsPerPage;
         var freq = config.FrequencyCapPerSession < 0 ? defaults.FrequencyCapPerSession : config.FrequencyCapPerSession;
         var slots = config.Slots ?? new List<AdSlotDto>();
-        return config with { MaxSlotsPerPage = maxSlots, FrequencyCapPerSession = freq, Slots = slots };
+        return config with
+        {
+            MaxSlotsPerPage = maxSlots,
+            FrequencyCapPerSession = freq,
+            Slots = slots,
+            GoogleAdsClientId = NormalizeNullable(config.GoogleAdsClientId),
+            GoogleAdsScriptUrl = NormalizeNullable(config.GoogleAdsScriptUrl),
+            GoogleAdsSlotId = NormalizeNullable(config.GoogleAdsSlotId)
+        };
     }
 
     private static void ValidateBrandingConfig(BrandingConfigDto config)

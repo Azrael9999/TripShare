@@ -24,6 +24,8 @@ public sealed class User
     public bool IdentityVerified { get; set; }
     public DateTimeOffset? IdentityVerifiedAt { get; set; }
     public bool IsSuspended { get; set; }
+    public string? SuspensionNote { get; set; }
+    public DateTimeOffset? SuspensionUpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public string Role { get; set; } = "user"; // user/admin/superadmin

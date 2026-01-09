@@ -15,9 +15,9 @@ import ResetPassword from '../views/ResetPassword.vue'
 import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import AdminReports from '../views/admin/AdminReports.vue'
 import AdminIdentity from '../views/admin/AdminIdentity.vue'
-import AdminAds from '../views/admin/AdminAds.vue'
 import AdminLogin from '../views/admin/AdminLogin.vue'
 import AdminAccounts from '../views/admin/AdminAccounts.vue'
+import AdminSiteSettings from '../views/admin/AdminSiteSettings.vue'
 import { useAuthStore } from '../stores/auth'
 import { useAdsStore } from '../stores/ads'
 
@@ -41,7 +41,8 @@ const router = createRouter({
     { path: '/admin', component: AdminDashboard, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin | HopTrip' } },
     { path: '/admin/reports', component: AdminReports, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin reports | HopTrip' } },
     { path: '/admin/identity', component: AdminIdentity, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin identity | HopTrip' } },
-    { path: '/admin/ads', component: AdminAds, meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin ads | HopTrip' } },
+    { path: '/admin/site-settings', component: AdminSiteSettings, meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Site settings | HopTrip' } },
+    { path: '/admin/ads', redirect: '/admin/site-settings' },
     { path: '/admin/admins', component: AdminAccounts, meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Admin accounts | HopTrip' } }
   ]
 })
